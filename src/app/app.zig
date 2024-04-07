@@ -5,15 +5,17 @@ const cmd = @import("../utils/commands.zig");
 
 pub fn app() !void {
     try tools.titleMaker("ZIX Configuration");
-    try tools.titleMaker("Git Pull");
-    try tools.runCmd(cmd.gitPullCmd);
+    if (try tools.askContinue(null)) {
+        try tools.titleMaker("Git Pull");
+        try tools.runCmd(cmd.gitPullCmd);
 
-    try tools.titleMaker("Nix Update");
-    try tools.titleMaker("Git Changes");
-    try tools.titleMaker("Nixos Rebuild");
-    try tools.titleMaker("Nix Diff");
-    try tools.runCmd(cmd.nixDiffCmd);
+        try tools.titleMaker("Nix Update");
+        try tools.titleMaker("Git Changes");
+        try tools.titleMaker("Nixos Rebuild");
+        try tools.titleMaker("Nix Diff");
+        try tools.runCmd(cmd.nixDiffCmd);
 
-    try tools.titleMaker("Current Directory");
-    try tools.runCmd("ls -a");
+        try tools.titleMaker("Current Directory");
+        try tools.runCmd("ls -a");
+    }
 }

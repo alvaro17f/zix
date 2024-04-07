@@ -1,4 +1,5 @@
 const std = @import("std");
+const eql = std.mem.eql;
 const print = std.debug.print;
 
 pub fn titleMaker(text: []const u8) !void {
@@ -6,7 +7,10 @@ pub fn titleMaker(text: []const u8) !void {
     defer arena.deinit();
     const allocator = arena.allocator();
 
-    var border = try allocator.alloc(u8, text.len + 4);
+    const border = allocator.alloc(u8, text.len + 4) catch |err| {
+        std.log.err("Failed to allocate memory: {}", .{err});
+        return err;
+    };
 
     for (border) |*c| {
         c.* = '*';
@@ -39,4 +43,21 @@ pub fn runCmd(command: []const u8) !void {
 
     // TODO: handle exit status
     _ = try cmd.wait();
+}
+
+pub fn askContinue(comptime msg: ?[]const u8) !bool {
+    if (msg) |value| {
+        _ = try std.io.getStdOut().write(std.fmt.comptimePrint("{s} (y/n): ", .{value}));
+    } else {
+        _ = try std.io.getStdOut().write("Proceed? (y/n): ");
+    }
+    var buffer: [3]u8 = undefined;
+    const response = try std.io.getStdIn().reader().readUntilDelimiterOrEof(&buffer, '\n') orelse "";
+    if (eql(u8, response, "y") or eql(u8, response, "Y")) {
+        return true;
+    } else if (eql(u8, response, "n") or eql(u8, response, "N")) {
+        return false;
+    } else {
+        return false;
+    }
 }

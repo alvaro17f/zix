@@ -45,18 +45,23 @@ pub fn runCmd(command: []const u8) !void {
     _ = try cmd.wait();
 }
 
-pub fn askContinue(comptime msg: ?[]const u8) !bool {
+pub fn confirm(comptime default_value: bool, comptime msg: ?[]const u8) !bool {
+    const default_value_str = if (default_value == true) "(Y/n)" else "(y/N)";
+
     if (msg) |value| {
-        _ = try std.io.getStdOut().write(std.fmt.comptimePrint("{s} (y/n): ", .{value}));
+        _ = try std.io.getStdOut().write(std.fmt.comptimePrint("\n\n{s} {s}: ", .{ value, default_value_str }));
     } else {
-        _ = try std.io.getStdOut().write("Proceed? (y/n): ");
+        _ = try std.io.getStdOut().write(std.fmt.comptimePrint("\n\nProceed? {s}: ", .{default_value_str}));
     }
+
     var buffer: [3]u8 = undefined;
     const response = try std.io.getStdIn().reader().readUntilDelimiterOrEof(&buffer, '\n') orelse "";
     if (eql(u8, response, "y") or eql(u8, response, "Y")) {
         return true;
     } else if (eql(u8, response, "n") or eql(u8, response, "N")) {
         return false;
+    } else if (eql(u8, response, "\n") or eql(u8, response, "")) {
+        return default_value;
     } else {
         return false;
     }

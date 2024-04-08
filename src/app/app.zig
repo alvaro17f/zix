@@ -5,7 +5,9 @@ const cmd = @import("../utils/commands.zig");
 
 pub fn app() !void {
     try tools.titleMaker("ZIX Configuration");
-    if (try tools.askContinue(null)) {
+    print(cmd.configurationCmd, .{});
+
+    if (try tools.confirm(true, null)) {
         try tools.titleMaker("Git Pull");
         try tools.runCmd(cmd.gitPullCmd);
 

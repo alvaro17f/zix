@@ -26,7 +26,7 @@ pub fn runCmd(command: []const u8) !void {
 
     const shellCommand = [_][]const u8{ "sh", "-c", command };
 
-    var cmd = std.ChildProcess.init(&shellCommand, allocator);
+    var cmd = std.process.Child.init(&shellCommand, allocator);
 
     cmd.stdin_behavior = .Inherit;
     cmd.stdout_behavior = .Inherit;

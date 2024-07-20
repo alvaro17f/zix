@@ -11,16 +11,41 @@ pub const Cli = struct {
     diff: bool,
 };
 
+fn printHelp() void {
+    std.debug.print(
+        \\
+        \\ ***************************************************
+        \\ ZIX - A simple CLI tool to update your nixos system
+        \\ ***************************************************
+        \\ -r : set repo path (default is $HOME/.dotfiles)
+        \\ -n : set hostname (default is OS hostname)
+        \\ -u : set update to true (default is false)
+        \\ -d : set diff to true (default is false)
+        \\ -h, help : Display this help message
+        \\ -v, version : Display the current version
+        \\
+        \\
+    , .{});
+}
+
+fn printVersion() void {
+    std.debug.print("\nZIX version: {s}\n", .{version});
+}
+
+fn getHostname(buffer: *[64]u8) []const u8 {
+    return std.posix.gethostname(buffer) catch "unknown";
+}
+
 pub fn main() !void {
     var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
 
-    var name_buffer: [std.os.linux.HOST_NAME_MAX]u8 = undefined;
+    var hostname_buffer: [std.os.linux.HOST_NAME_MAX]u8 = undefined;
 
     var cli = Cli{
         .repo = "~/.dotfiles",
-        .hostname = std.posix.gethostname(&name_buffer) catch "unknown",
+        .hostname = getHostname(&hostname_buffer),
         .update = false,
         .diff = false,
     };
@@ -33,48 +58,38 @@ pub fn main() !void {
     }
 
     for (args, 0..) |arg, idx| {
-        if (eql(u8, arg, "-h")) {
-            return std.debug.print(
-                \\
-                \\ ***************************************************
-                \\ ZIX - A simple CLI tool to update your nixos system
-                \\ ***************************************************
-                \\ -r : set repo path (default is $HOME/.dotfiles)
-                \\ -n : set hostname (default is OS hostname)
-                \\ -u : set update to true (default is false)
-                \\ -d : set diff to true (default is false)
-                \\ -h : Display this help message
-                \\ -v : Display the current version
-                \\
-            , .{});
-        }
-
-        if (eql(u8, arg, "-v")) {
-            return std.debug.print("\nZIX version: {s}\n", .{version});
-        }
-
-        if (eql(u8, arg, "-r")) {
-            if (idx + 1 >= args.len) {
-                return std.debug.print("Error: -r flag requires an argument\n", .{});
+        if (arg[0] == '-') {
+            for (arg[1..]) |flag| {
+                switch (flag) {
+                    'h' => {
+                        return printHelp();
+                    },
+                    'v' => {
+                        return printVersion();
+                    },
+                    'd' => cli.diff = true,
+                    'u' => cli.update = true,
+                    'r', 'n' => {
+                        if (idx + 1 >= args.len) {
+                            return std.debug.print("Error: -{c} flag requires an argument\n", .{flag});
+                        }
+                        if (flag == 'r') cli.repo = args[idx + 1];
+                        if (flag == 'n') cli.hostname = args[idx + 1];
+                    },
+                    else => return std.debug.print("Error: Unknown flag -{c}\n", .{flag}),
+                }
             }
+        } else {
+            for (args[1..]) |argument| {
+                if (eql(u8, argument, "help")) {
+                    return printHelp();
+                }
+                if (eql(u8, argument, "version")) {
+                    return printVersion();
+                }
 
-            cli.repo = args[idx + 1];
-        }
-
-        if (eql(u8, arg, "-u")) {
-            cli.update = true;
-        }
-
-        if (eql(u8, arg, "-d")) {
-            cli.diff = true;
-        }
-
-        if (eql(u8, arg, "-n")) {
-            if (idx + 1 >= args.len) {
-                return std.debug.print("Error: -n flag requires an argument\n", .{});
+                return std.debug.print("Error: Unknown argument \"{s}\"\n", .{argument});
             }
-
-            cli.hostname = args[idx + 1];
         }
     }
 

@@ -6,7 +6,7 @@ const version = "0.1.0";
 
 pub const Cli = struct {
     repo: []const u8,
-    // hostname: []const u8,
+    hostname: []const u8,
     update: bool,
     diff: bool,
 };
@@ -16,9 +16,11 @@ pub fn main() !void {
     defer arena.deinit();
     const allocator = arena.allocator();
 
+    var name_buffer: [std.os.linux.HOST_NAME_MAX]u8 = undefined;
+
     var cli = Cli{
         .repo = "~/.dotfiles",
-        // .hostname,
+        .hostname = std.posix.gethostname(&name_buffer) catch "unknown",
         .update = false,
         .diff = false,
     };
@@ -30,7 +32,7 @@ pub fn main() !void {
         return try app(cli);
     }
 
-    for (args) |arg| {
+    for (args, 0..) |arg, idx| {
         if (eql(u8, arg, "-h")) {
             return std.debug.print(
                 \\
@@ -38,6 +40,7 @@ pub fn main() !void {
                 \\ ZIX - A simple CLI tool to update your nixos system
                 \\ ***************************************************
                 \\ -r : set repo path (default is $HOME/.dotfiles)
+                \\ -n : set hostname (default is OS hostname)
                 \\ -u : set update to true (default is false)
                 \\ -d : set diff to true (default is false)
                 \\ -h : Display this help message
@@ -50,12 +53,13 @@ pub fn main() !void {
             return std.debug.print("\nZIX version: {s}\n", .{version});
         }
 
-        // if (eql(u8, arg, "-r")) {
-        //     if (arg + 1 == args.len) {
-        //         return std.debug.print("Error: -r flag requires an argument\n", .{});
-        //     }
-        //     Cli.repo = args[arg + 1];
-        // }
+        if (eql(u8, arg, "-r")) {
+            if (idx + 1 >= args.len) {
+                return std.debug.print("Error: -r flag requires an argument\n", .{});
+            }
+
+            cli.repo = args[idx + 1];
+        }
 
         if (eql(u8, arg, "-u")) {
             cli.update = true;
@@ -65,10 +69,13 @@ pub fn main() !void {
             cli.diff = true;
         }
 
-        // if (eql(u8, arg, "-n")) {
-        // Cli.hostname = arg;
-        // }
+        if (eql(u8, arg, "-n")) {
+            if (idx + 1 >= args.len) {
+                return std.debug.print("Error: -n flag requires an argument\n", .{});
+            }
 
+            cli.hostname = args[idx + 1];
+        }
     }
 
     return try app(cli);

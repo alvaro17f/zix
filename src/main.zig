@@ -9,22 +9,19 @@ pub const Cli = struct {
     // hostname: []const u8,
     update: bool,
     diff: bool,
-
-    pub fn init() !Cli {
-        return Cli{
-            .repo = "~/.dotfiles",
-            // .hostname = try std.os.getHostName(),
-            .update = false,
-            .diff = false,
-        };
-    }
 };
+
 pub fn main() !void {
     var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
 
-    var cli = try Cli.init();
+    var cli = Cli{
+        .repo = "~/.dotfiles",
+        // .hostname,
+        .update = false,
+        .diff = false,
+    };
 
     const args = try std.process.argsAlloc(allocator);
     defer std.process.argsFree(allocator, args);
@@ -72,6 +69,7 @@ pub fn main() !void {
         // Cli.hostname = arg;
         // }
 
-        return try app(cli);
     }
+
+    return try app(cli);
 }

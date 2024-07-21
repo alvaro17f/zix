@@ -3,9 +3,9 @@ const std = @import("std");
 pub fn configPrint(repo: []const u8, update: []const u8, diff: []const u8, hostname: []const u8) void {
     std.debug.print(
         \\ repo = {s}
+        \\ hostname = {s}
         \\ update = {s}
         \\ diff = {s}
-        \\ hostname = {s}
     , .{ repo, update, diff, hostname });
 }
 pub const gitPullCmd = std.fmt.comptimePrint("git -C {s} pull", .{"~/.dotfiles"});

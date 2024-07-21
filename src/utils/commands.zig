@@ -6,7 +6,7 @@ pub fn configPrint(repo: []const u8, update: []const u8, diff: []const u8, hostn
         \\ hostname = {s}
         \\ update = {s}
         \\ diff = {s}
-    , .{ repo, update, diff, hostname });
+    , .{ repo, hostname, update, diff });
 }
 pub const gitPullCmd = std.fmt.comptimePrint("git -C {s} pull", .{"~/.dotfiles"});
 pub const gitDiffCmd = std.fmt.comptimePrint("git -C {s} diff --exit-code", .{"~/.dotfiles"});

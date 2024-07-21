@@ -13,10 +13,10 @@ pub fn app(cli: Cli) !void {
         try tools.titleMaker("Git Pull");
         try tools.runCmd(cmd.gitPullCmd);
 
-        if (cli.update) return {
+        if (cli.update) {
             try tools.titleMaker("Nix Update");
             try tools.runCmd(cmd.nixUpdateCmd);
-        };
+        }
 
         const git_diff_exit_code = try tools.exitCode(cmd.gitDiffCmd);
         if (git_diff_exit_code == 1) {
@@ -36,9 +36,9 @@ pub fn app(cli: Cli) !void {
         try tools.titleMaker("Nix Keep");
         try tools.runCmd(cmd.nixKeepCmd);
 
-        if (cli.diff) return {
+        if (cli.diff) {
             try tools.titleMaker("Nix Diff");
             try tools.runCmd(cmd.nixDiffCmd);
-        };
+        }
     }
 }

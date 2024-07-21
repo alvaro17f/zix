@@ -57,7 +57,7 @@ pub fn main() !void {
         return try app(cli);
     }
 
-    for (args, 0..) |arg, idx| {
+    for (args[1..], 0..) |arg, idx| {
         if (arg[0] == '-') {
             for (arg[1..]) |flag| {
                 switch (flag) {

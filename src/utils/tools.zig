@@ -19,6 +19,24 @@ pub fn titleMaker(text: []const u8) !void {
     print("\n{s}\n* {s} *\n{s}\n", .{ border, text, border });
 }
 
+pub fn exitCode(command: []const u8) !i32 {
+    var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    const shellCommand = [_][]const u8{ "sh", "-c", command };
+
+    var cmd = std.process.Child.init(&shellCommand, allocator);
+
+    cmd.stdin_behavior = .Inherit;
+    cmd.stdout_behavior = .Ignore;
+    cmd.stderr_behavior = .Ignore;
+
+    try cmd.spawn();
+    const exit_code = try cmd.wait();
+    return exit_code.Exited;
+}
+
 pub fn runCmd(command: []const u8) !void {
     var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
     defer arena.deinit();
@@ -39,9 +57,8 @@ pub fn runCmd(command: []const u8) !void {
         while (try stdout_stream.readUntilDelimiterOrEofAlloc(allocator, '\n', 4096)) |line| {
             print("{s}\n", .{line});
         }
-    } else {}
+    }
 
-    // TODO: handle exit status
     _ = try cmd.wait();
 }
 

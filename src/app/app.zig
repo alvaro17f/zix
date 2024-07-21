@@ -13,13 +13,32 @@ pub fn app(cli: Cli) !void {
         try tools.titleMaker("Git Pull");
         try tools.runCmd(cmd.gitPullCmd);
 
-        try tools.titleMaker("Nix Update");
-        try tools.titleMaker("Git Changes");
-        try tools.titleMaker("Nixos Rebuild");
-        try tools.titleMaker("Nix Diff");
-        try tools.runCmd(cmd.nixDiffCmd);
+        if (cli.update) return {
+            try tools.titleMaker("Nix Update");
+            try tools.runCmd(cmd.nixUpdateCmd);
+        };
 
-        try tools.titleMaker("Current Directory");
-        try tools.runCmd("ls -a");
+        const git_diff_exit_code = try tools.exitCode(cmd.gitDiffCmd);
+        if (git_diff_exit_code == 1) {
+            try tools.titleMaker("Git Changes");
+            try tools.runCmd(cmd.gitStatusCmd);
+
+            if (try tools.confirm(true, "Do you want to add these changes to the stage?")) {
+                tools.runCmd(cmd.gitAddCmd) catch |err| {
+                    print("Failed to add changes to the stage: {}\n", .{err});
+                };
+            }
+        }
+
+        try tools.titleMaker("Nixos Rebuild");
+        try tools.runCmd(cmd.nixRebuildCmd);
+
+        try tools.titleMaker("Nix Keep");
+        try tools.runCmd(cmd.nixKeepCmd);
+
+        if (cli.diff) return {
+            try tools.titleMaker("Nix Diff");
+            try tools.runCmd(cmd.nixDiffCmd);
+        };
     }
 }

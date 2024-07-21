@@ -19,7 +19,7 @@ pub fn titleMaker(text: []const u8) !void {
     print("\n{s}\n* {s} *\n{s}\n", .{ border, text, border });
 }
 
-pub fn exitCode(command: []const u8) !i32 {
+pub fn runCmd(output: bool, command: []const u8) !i32 {
     var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -28,38 +28,30 @@ pub fn exitCode(command: []const u8) !i32 {
 
     var cmd = std.process.Child.init(&shellCommand, allocator);
 
-    cmd.stdin_behavior = .Inherit;
-    cmd.stdout_behavior = .Ignore;
-    cmd.stderr_behavior = .Ignore;
-
-    try cmd.spawn();
-    const exit_code = try cmd.wait();
-    return exit_code.Exited;
-}
-
-pub fn runCmd(command: []const u8) !void {
-    var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
-    defer arena.deinit();
-    const allocator = arena.allocator();
-
-    const shellCommand = [_][]const u8{ "sh", "-c", command };
-
-    var cmd = std.process.Child.init(&shellCommand, allocator);
-
-    cmd.stdin_behavior = .Inherit;
-    cmd.stdout_behavior = .Inherit;
-    cmd.stderr_behavior = .Inherit;
+    if (output) {
+        cmd.stdin_behavior = .Inherit;
+        cmd.stdout_behavior = .Inherit;
+        cmd.stderr_behavior = .Inherit;
+    } else {
+        cmd.stdin_behavior = .Ignore;
+        cmd.stdout_behavior = .Ignore;
+        cmd.stderr_behavior = .Ignore;
+    }
 
     try cmd.spawn();
 
-    if (cmd.stdout) |stdout| {
-        var stdout_stream = stdout.reader();
-        while (try stdout_stream.readUntilDelimiterOrEofAlloc(allocator, '\n', 4096)) |line| {
-            print("{s}\n", .{line});
+    if (output) {
+        if (cmd.stdout) |stdout| {
+            var stdout_stream = stdout.reader();
+            while (try stdout_stream.readUntilDelimiterOrEofAlloc(allocator, '\n', 4096)) |line| {
+                print("{s}\n", .{line});
+            }
         }
     }
 
-    _ = try cmd.wait();
+    const exit_status = try cmd.wait();
+
+    return exit_status.Exited;
 }
 
 pub fn confirm(comptime default_value: bool, comptime msg: ?[]const u8) !bool {

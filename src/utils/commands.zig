@@ -1,12 +1,13 @@
 const std = @import("std");
+const style = @import("style.zig").Style;
 
 pub fn configPrint(repo: []const u8, update: []const u8, diff: []const u8, hostname: []const u8) void {
     std.debug.print(
-        \\ repo = {s}
-        \\ hostname = {s}
-        \\ update = {s}
-        \\ diff = {s}
-    , .{ repo, hostname, update, diff });
+        \\ {s}repo{s} = {s}{s}{s}
+        \\ {s}hostname{s} = {s}{s}{s}
+        \\ {s}update{s} = {s}{s}{s}
+        \\ {s}diff{s} = {s}{s}{s}
+    , .{ style.Black, style.Reset, style.Cyan, repo, style.Reset, style.Black, style.Reset, style.Cyan, hostname, style.Reset, style.Black, style.Reset, style.Cyan, update, style.Reset, style.Black, style.Reset, style.Cyan, diff, style.Reset });
 }
 pub const gitPullCmd = std.fmt.comptimePrint("git -C {s} pull", .{"~/.dotfiles"});
 pub const gitDiffCmd = std.fmt.comptimePrint("git -C {s} diff --exit-code", .{"~/.dotfiles"});

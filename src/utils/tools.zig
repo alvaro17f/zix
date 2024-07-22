@@ -56,7 +56,7 @@ pub fn runCmd(output: bool, command: []const u8) !i32 {
 }
 
 pub fn confirm(comptime default_value: bool, comptime msg: ?[]const u8) !bool {
-    const default_value_str = if (default_value == true) "(Y/n)" else "(y/N)";
+    const default_value_str = if (default_value == true) std.fmt.comptimePrint("{s}(Y/n){s}", .{ style.Green, style.Reset }) else std.fmt.comptimePrint("{s}(y/N){s}", .{ style.Red, style.Reset });
 
     if (msg) |value| {
         _ = try std.io.getStdOut().write(std.fmt.comptimePrint("\n\n{s}{s}{s} {s}: ", .{ style.Yellow, value, style.Reset, default_value_str }));

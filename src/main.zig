@@ -8,6 +8,7 @@ const version = "0.1.0";
 pub const Cli = struct {
     repo: []const u8,
     hostname: []const u8,
+    keep: u8,
     update: bool,
     diff: bool,
 };
@@ -20,6 +21,7 @@ fn printHelp() void {
         \\ ***************************************************
         \\ -r : set repo path (default is $HOME/.dotfiles)
         \\ -n : set hostname (default is OS hostname)
+        \\ -k : set generations to keep (default is 10)
         \\ -u : set update to true (default is false)
         \\ -d : set diff to true (default is false)
         \\ -h, help : Display this help message
@@ -47,6 +49,7 @@ pub fn main() !void {
     var cli = Cli{
         .repo = "~/.dotfiles",
         .hostname = getHostname(&hostname_buffer),
+        .keep = 10,
         .update = false,
         .diff = false,
     };
@@ -70,12 +73,19 @@ pub fn main() !void {
                     },
                     'd' => cli.diff = true,
                     'u' => cli.update = true,
-                    'r', 'n' => {
+                    'r', 'n', 'k' => {
                         if (idx + 2 >= args.len) {
                             return std.debug.print("{s}Error: \"-{c}\" flag requires an argument\n{s}", .{ style.Red, flag, style.Reset });
                         }
                         if (flag == 'r') cli.repo = args[idx + 2];
                         if (flag == 'n') cli.hostname = args[idx + 2];
+                        if (flag == 'k') {
+                            const argument = args[idx + 2];
+                            const number = std.fmt.parseInt(u8, argument, 10) catch {
+                                return std.debug.print("{s}Error: Value of \"-k\" flag is not numeric.\n{s}", .{ style.Red, style.Reset });
+                            };
+                            cli.keep = number;
+                        }
                     },
                     else => return std.debug.print("{s}Error: Unknown flag \"-{c}\"\n{s}", .{ style.Red, flag, style.Reset }),
                 }

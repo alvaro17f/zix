@@ -71,16 +71,16 @@ pub fn main() !void {
                     'd' => cli.diff = true,
                     'u' => cli.update = true,
                     'r', 'n' => {
-                        if (idx + 1 >= args.len) {
-                            return std.debug.print("Error: -{c} flag requires an argument\n", .{flag});
+                        if (idx + 2 >= args.len) {
+                            return std.debug.print("{s}Error: \"-{c}\" flag requires an argument\n{s}", .{ style.Red, flag, style.Reset });
                         }
-                        if (flag == 'r') cli.repo = args[idx + 1];
-                        if (flag == 'n') cli.hostname = args[idx + 1];
+                        if (flag == 'r') cli.repo = args[idx + 2];
+                        if (flag == 'n') cli.hostname = args[idx + 2];
                     },
                     else => return std.debug.print("{s}Error: Unknown flag \"-{c}\"\n{s}", .{ style.Red, flag, style.Reset }),
                 }
             }
-        } else {
+        } else if (idx == 0) {
             for (args[1..]) |argument| {
                 if (eql(u8, argument, "help")) {
                     return printHelp();

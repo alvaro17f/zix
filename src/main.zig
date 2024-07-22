@@ -1,6 +1,7 @@
 const std = @import("std");
 const app = @import("app/app.zig").app;
 const eql = std.mem.eql;
+const style = @import("utils/style.zig").Style;
 
 const version = "0.1.0";
 
@@ -29,7 +30,7 @@ fn printHelp() void {
 }
 
 fn printVersion() void {
-    std.debug.print("\nZIX version: {s}\n", .{version});
+    std.debug.print("{s}\nZIX version: {s}{s}\n{s}", .{ style.Black, style.Cyan, version, style.Reset });
 }
 
 fn getHostname(buffer: *[64]u8) []const u8 {
@@ -76,7 +77,7 @@ pub fn main() !void {
                         if (flag == 'r') cli.repo = args[idx + 1];
                         if (flag == 'n') cli.hostname = args[idx + 1];
                     },
-                    else => return std.debug.print("Error: Unknown flag -{c}\n", .{flag}),
+                    else => return std.debug.print("{s}Error: Unknown flag \"-{c}\"\n{s}", .{ style.Red, flag, style.Reset }),
                 }
             }
         } else {
@@ -88,7 +89,7 @@ pub fn main() !void {
                     return printVersion();
                 }
 
-                return std.debug.print("Error: Unknown argument \"{s}\"\n", .{argument});
+                return std.debug.print("{s}Error: Unknown argument \"{s}\"\n{s}", .{ style.Red, argument, style.Reset });
             }
         }
     }

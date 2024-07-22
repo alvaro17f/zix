@@ -1,6 +1,7 @@
 const std = @import("std");
 const eql = std.mem.eql;
 const print = std.debug.print;
+const style = @import("style.zig").Style;
 
 pub fn titleMaker(text: []const u8) !void {
     var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
@@ -16,7 +17,7 @@ pub fn titleMaker(text: []const u8) !void {
         c.* = '*';
     }
 
-    print("\n{s}\n* {s} *\n{s}\n", .{ border, text, border });
+    print("{s}\n{s}\n* {s}{s}{s} *\n{s}\n{s}", .{ style.Blue, border, style.Red, text, style.Blue, border, style.Reset });
 }
 
 pub fn runCmd(output: bool, command: []const u8) !i32 {
@@ -58,9 +59,9 @@ pub fn confirm(comptime default_value: bool, comptime msg: ?[]const u8) !bool {
     const default_value_str = if (default_value == true) "(Y/n)" else "(y/N)";
 
     if (msg) |value| {
-        _ = try std.io.getStdOut().write(std.fmt.comptimePrint("\n\n{s} {s}: ", .{ value, default_value_str }));
+        _ = try std.io.getStdOut().write(std.fmt.comptimePrint("\n\n{s}{s}{s} {s}: ", .{ style.Yellow, value, style.Reset, default_value_str }));
     } else {
-        _ = try std.io.getStdOut().write(std.fmt.comptimePrint("\n\nProceed? {s}: ", .{default_value_str}));
+        _ = try std.io.getStdOut().write(std.fmt.comptimePrint("\n\n{s}Proceed?{s} {s}: ", .{ style.Yellow, style.Reset, default_value_str }));
     }
 
     var buffer: [3]u8 = undefined;

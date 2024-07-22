@@ -34,10 +34,7 @@ pub fn app(cli: Cli) !void {
 
         try tools.titleMaker("Nixos Rebuild");
         _ = try tools.runCmd(true, try cmd.nixRebuildCmd(allocator, cli.repo, cli.hostname));
-
-        if (try tools.runCmd(false, try cmd.nixKeepCmd(allocator, cli.keep)) == 1) {
-            _ = try tools.runCmd(true, try cmd.nixKeepCmd(allocator, cli.keep));
-        }
+        _ = try tools.runCmd(true, try cmd.nixKeepCmd(allocator, cli.keep));
 
         if (cli.diff) {
             try tools.titleMaker("Nix Diff");

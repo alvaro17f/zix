@@ -1,0 +1,16 @@
+version: "3"
+
+tasks:
+  default:
+    cmds:
+      - task: build
+      - task: run
+  build:
+    cmds:
+      - zig build .
+  run:
+    cmds:
+      - ./zig-out/zix {{.CLI_ARGS}}
+  vhs:
+    cmds:
+      - vhs ./vhs/zix.tape

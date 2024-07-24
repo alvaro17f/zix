@@ -15,19 +15,57 @@ cd zix
 zig build run
 ```
 
-## Usage
-To use ZIX, run the zix command with the desired options. Here are some examples:
+then move the binary to a directory in your PATH:
 
 ```sh
-# Update the system
-zix --update
-
-# Keep the last 5 generations
-zix --keep 5
-
-# Show the differences between generations
-zix --diff
+sudo mv zig-out/bin/zix <PATH>
 ```
+
+### NixOS
+
+#### Run
+To run ZIX, you can use the following command:
+
+```sh
+nix run github:alvaro17f/zix#target.x86_64-linux-musl
+```
+
+#### Flake
+Add zix to your flake.nix file:
+
+```nix
+{
+    inputs = {
+        zix.url = "github:alvaro17f/zix";
+    };
+}
+```
+
+then include it in your system configuration:
+
+```nix
+{ inputs, pkgs, ... }:
+{
+    home.packages = [
+        inputs.zix.packages.${pkgs.system}.default
+    ];
+}
+```
+
+## Usage
+```sh
+ ***************************************************
+ ZIX - A simple CLI tool to update your nixos system
+ ***************************************************
+ -r : set repo path (default is $HOME/.dotfiles)
+ -n : set hostname (default is OS hostname)
+ -k : set generations to keep (default is 10)
+ -u : set update to true (default is false)
+ -d : set diff to true (default is false)
+ -h, help : Display this help message
+ -v, version : Display the current version
+```
+
 
 ## License
 ZIX is distributed under the MIT license. See the LICENSE file for more information.

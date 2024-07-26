@@ -6,7 +6,7 @@ permissions:
 on:
   push:
     tags:
-      - "*.*.*"
+      - "[0-9]+.[0-9]+.[0-9]+"
 jobs:
   build:
     strategy:
@@ -33,27 +33,60 @@ jobs:
         commitMode: true
         configurationJson: |
           {
-            "template": "#{{CHANGELOG}}",
+
+            "pr_template": "- #{{TITLE}}",
             "categories": [
               {
-                  "title": "## Feature",
-                  "labels": ["feat", "feature"]
+                "title": "## 🚨 Breaking Changes",
+                "labels": ["breaking"]
               },
               {
-                  "title": "## Fix",
-                  "labels": ["fix", "bug"]
+                "title": "## 🚀 Feature",
+                "labels": ["feat", "feature"]
               },
               {
-                  "title": "## Other",
-                  "labels": []
+                "title": "## 🐛 Fix",
+                "labels": ["fix", "bug"]
+              },
+              {
+                "title": "## ♻️ Refactor",
+                "labels": ["refactor"]
+              },
+              {
+                "title": "## 🧪 Tests",
+                "labels": ["test"]
+              },
+              {
+                "title": "## 💄 Style",
+                "labels": ["style"]
+              },
+              {
+                "title": "## 📝 Docs",
+                "labels": ["docs"]
+              },
+              {
+                "title": "## 🔨 Chore",
+                "labels": ["chore"]
+              },
+              {
+                "title": "## ⚡️ Performance",
+                "labels": ["perf"]
+              },
+              {
+                "title": "## 👷 CI",
+                "labels": ["ci"]
               }
             ],
             "label_extractor": [
               {
-                "pattern": "^(build|chore|ci|docs|feat|fix|perf|refactor|revert|style|test){1}(\\([\\w\\-\\.]+\\))?(!)?: ([\\w ])+([\\s\\S]*)",
+                "pattern": ".*!.*|^breaking:.*",
+                "target": "breaking"
+              },
+              {
+                "pattern": "^(build|chore|ci|docs|feat|fix|perf|refactor|revert|style|test){1}(\\([\\w\\-\\.]+\\))?(: ([\\w ])+([\\s\\S]*))?",
                 "target": "$1"
               }
-            ],
+            ]
           }
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

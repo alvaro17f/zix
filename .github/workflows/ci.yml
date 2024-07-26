@@ -33,7 +33,6 @@ jobs:
         commitMode: true
         configurationJson: |
           {
-
             "pr_template": "- #{{TITLE}}",
             "categories": [
               {

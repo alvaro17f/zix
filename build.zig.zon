@@ -1,7 +1,7 @@
 .{
-    .name = .default,
+    .name = .zix,
     .version = "1.0.0",
-    .fingerprint = 0xe35e00dfb8f1880e, // Changing this has security and trust implications.
+    .fingerprint = 0x4cc61d7440c1804b,
     .minimum_zig_version = "0.14.0",
     .dependencies = .{},
     .paths = .{

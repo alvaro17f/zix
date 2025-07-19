@@ -19,12 +19,12 @@ pub fn titleMaker(text: []const u8) !void {
     print("{s}\n{s}\n* {s}{s}{s} *\n{s}\n{s}", .{ style.Blue, border, style.Red, text, style.Blue, border, style.Reset });
 }
 
-pub fn runCmd(args: struct { command: []const u8, output: bool = true }) !i32 {
-    const shellCommand = [_][]const u8{ "sh", "-c", args.command };
+pub fn runCmd(command: []const u8, opts: struct { output: bool = true }) !i32 {
+    const shellCommand = [_][]const u8{ "sh", "-c", command };
 
     var cmd = std.process.Child.init(&shellCommand, allocator);
 
-    const isOutputEnabled: std.process.Child.StdIo = if (args.output) .Inherit else .Ignore;
+    const isOutputEnabled: std.process.Child.StdIo = if (opts.output) .Inherit else .Ignore;
 
     cmd.stdin_behavior = isOutputEnabled;
     cmd.stdout_behavior = isOutputEnabled;
@@ -32,7 +32,7 @@ pub fn runCmd(args: struct { command: []const u8, output: bool = true }) !i32 {
 
     try cmd.spawn();
 
-    if (args.output) {
+    if (opts.output) {
         if (cmd.stdout) |stdout| {
             var stdout_stream = stdout.reader();
             while (try stdout_stream.readUntilDelimiterOrEofAlloc(allocator, '\n', 4096)) |line| {

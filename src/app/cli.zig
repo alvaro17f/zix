@@ -10,31 +10,31 @@ pub fn cli(config: Config) !void {
 
     if (try tools.confirm(true, null)) {
         try tools.titleMaker("Git Pull");
-        _ = try tools.runCmd(.{ .command = try cmd.gitPullCmd(config.repo) });
+        _ = try tools.runCmd(try cmd.gitPullCmd(config.repo), .{});
 
         if (config.update) {
             try tools.titleMaker("Nix Update");
-            _ = try tools.runCmd(.{ .command = try cmd.nixUpdateCmd(config.repo) });
+            _ = try tools.runCmd(try cmd.nixUpdateCmd(config.repo), .{});
         }
 
-        if (try tools.runCmd(.{ .command = try cmd.gitDiffCmd(config.repo), .output = false }) == 1) {
+        if (try tools.runCmd(try cmd.gitDiffCmd(config.repo), .{ .output = false }) == 1) {
             try tools.titleMaker("Git Changes");
-            _ = try tools.runCmd(.{ .command = try cmd.gitStatusCmd(config.repo) });
+            _ = try tools.runCmd(try cmd.gitStatusCmd(config.repo), .{});
 
             if (try tools.confirm(true, "Do you want to add these changes to the stage?")) {
-                _ = tools.runCmd(.{ .command = try cmd.gitAddCmd(config.repo) }) catch |err| {
+                _ = tools.runCmd(try cmd.gitAddCmd(config.repo), .{}) catch |err| {
                     print("Failed to add changes to the stage: {}\n", .{err});
                 };
             }
         }
 
         try tools.titleMaker("Nixos Rebuild");
-        _ = try tools.runCmd(.{ .command = try cmd.nixRebuildCmd(config.repo, config.hostname) });
-        _ = try tools.runCmd(.{ .command = try cmd.nixKeepCmd(config.keep) });
+        _ = try tools.runCmd(try cmd.nixRebuildCmd(config.repo, config.hostname), .{});
+        _ = try tools.runCmd(try cmd.nixKeepCmd(config.keep), .{});
 
         if (config.diff) {
             try tools.titleMaker("Nix Diff");
-            _ = try tools.runCmd(.{ .command = cmd.nixDiffCmd });
+            _ = try tools.runCmd(cmd.nixDiffCmd, .{});
         }
     }
 }

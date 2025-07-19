@@ -18,7 +18,7 @@ pub fn titleMaker(text: []const u8) !void {
     std.debug.print("{s}\n{s}\n* {s}{s}{s} *\n{s}\n{s}", .{ style.Blue, border, style.Red, text, style.Blue, border, style.Reset });
 }
 
-pub fn runCmd(command: []const u8, opts: struct { output: bool = true }) !i32 {
+pub fn run(command: []const u8, opts: struct { output: bool = true }) !i32 {
     const shellCommand = [_][]const u8{ "sh", "-c", command };
 
     var cmd = std.process.Child.init(&shellCommand, allocator);

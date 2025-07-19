@@ -14,32 +14,32 @@ pub fn configPrint(repo: []const u8, hostname: []const u8, keep: u8, update: []c
     , .{ style.Black, style.Red, style.Reset, style.Cyan, repo, style.Reset, style.Black, style.Red, style.Reset, style.Cyan, hostname, style.Reset, style.Black, style.Red, style.Reset, style.Cyan, keep, style.Reset, style.Black, style.Red, style.Reset, style.Cyan, update, style.Reset, style.Black, style.Red, style.Reset, style.Cyan, diff, style.Reset });
 }
 
-pub fn gitPullCmd(repo: []const u8) ![]const u8 {
+pub fn gitPull(repo: []const u8) ![]const u8 {
     return std.fmt.allocPrint(allocator, "git -C {s} pull", .{repo});
 }
 
-pub fn gitDiffCmd(repo: []const u8) ![]const u8 {
+pub fn gitDiff(repo: []const u8) ![]const u8 {
     return std.fmt.allocPrint(allocator, "git -C {s} diff --exit-code", .{repo});
 }
 
-pub fn gitStatusCmd(repo: []const u8) ![]const u8 {
+pub fn gitStatus(repo: []const u8) ![]const u8 {
     return std.fmt.allocPrint(allocator, "git -C {s} status --porcelain", .{repo});
 }
 
-pub fn gitAddCmd(repo: []const u8) ![]const u8 {
+pub fn gitAdd(repo: []const u8) ![]const u8 {
     return std.fmt.allocPrint(allocator, "git -C {s} add .", .{repo});
 }
 
-pub fn nixUpdateCmd(repo: []const u8) ![]const u8 {
+pub fn nixUpdate(repo: []const u8) ![]const u8 {
     return std.fmt.allocPrint(allocator, "cd {s} && nix flake update", .{repo});
 }
 
-pub fn nixRebuildCmd(repo: []const u8, hostname: []const u8) ![]const u8 {
+pub fn nixRebuild(repo: []const u8, hostname: []const u8) ![]const u8 {
     return std.fmt.allocPrint(allocator, "sudo nixos-rebuild switch --flake {s}#{s} --show-trace", .{ repo, hostname });
 }
 
-pub fn nixKeepCmd(generations_to_keep: u8) ![]const u8 {
+pub fn nixKeep(generations_to_keep: u8) ![]const u8 {
     return std.fmt.allocPrint(allocator, "sudo nix-env --profile /nix/var/nix/profiles/system --delete-generations +{d}", .{generations_to_keep});
 }
 
-pub const nixDiffCmd = "nix profile diff-closures --profile /nix/var/nix/profiles/system | tac | awk '/Version/{print; exit} 1' | tac";
+pub const nixDiff = "nix profile diff-closures --profile /nix/var/nix/profiles/system | tac | awk '/Version/{print; exit} 1' | tac";

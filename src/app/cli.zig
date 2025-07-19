@@ -1,5 +1,4 @@
 const std = @import("std");
-const print = std.debug.print;
 const tools = @import("../utils/tools.zig");
 const cmd = @import("../utils/commands.zig");
 const Config = @import("init.zig").Config;
@@ -23,7 +22,7 @@ pub fn cli(config: Config) !void {
 
             if (try tools.confirm(true, "Do you want to add these changes to the stage?")) {
                 _ = tools.runCmd(try cmd.gitAddCmd(config.repo), .{}) catch |err| {
-                    print("Failed to add changes to the stage: {}\n", .{err});
+                    std.debug.print("Failed to add changes to the stage: {}\n", .{err});
                 };
             }
         }

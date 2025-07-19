@@ -1,13 +1,12 @@
 const std = @import("std");
 const eql = std.mem.eql;
 const print = std.debug.print;
-const style = @import("style.zig").Style;
+const style = @import("style.zig");
+const builtin = @import("builtin");
+
+const allocator = if (builtin.mode == .Debug) std.heap.page_allocator else std.heap.c_allocator;
 
 pub fn titleMaker(text: []const u8) !void {
-    var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
-    defer arena.deinit();
-    const allocator = arena.allocator();
-
     const border = allocator.alloc(u8, text.len + 4) catch |err| {
         std.log.err("Failed to allocate memory: {}", .{err});
         return err;
@@ -20,28 +19,20 @@ pub fn titleMaker(text: []const u8) !void {
     print("{s}\n{s}\n* {s}{s}{s} *\n{s}\n{s}", .{ style.Blue, border, style.Red, text, style.Blue, border, style.Reset });
 }
 
-pub fn runCmd(output: bool, command: []const u8) !i32 {
-    var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
-    defer arena.deinit();
-    const allocator = arena.allocator();
-
-    const shellCommand = [_][]const u8{ "sh", "-c", command };
+pub fn runCmd(args: struct { command: []const u8, output: bool = true }) !i32 {
+    const shellCommand = [_][]const u8{ "sh", "-c", args.command };
 
     var cmd = std.process.Child.init(&shellCommand, allocator);
 
-    if (output) {
-        cmd.stdin_behavior = .Inherit;
-        cmd.stdout_behavior = .Inherit;
-        cmd.stderr_behavior = .Inherit;
-    } else {
-        cmd.stdin_behavior = .Ignore;
-        cmd.stdout_behavior = .Ignore;
-        cmd.stderr_behavior = .Ignore;
-    }
+    const isOutputEnabled: std.process.Child.StdIo = if (args.output) .Inherit else .Ignore;
+
+    cmd.stdin_behavior = isOutputEnabled;
+    cmd.stdout_behavior = isOutputEnabled;
+    cmd.stderr_behavior = isOutputEnabled;
 
     try cmd.spawn();
 
-    if (output) {
+    if (args.output) {
         if (cmd.stdout) |stdout| {
             var stdout_stream = stdout.reader();
             while (try stdout_stream.readUntilDelimiterOrEofAlloc(allocator, '\n', 4096)) |line| {

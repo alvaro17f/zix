@@ -50,16 +50,16 @@
         };
 
         # nix run .
-        apps.default = env.app [ ] "zig build run -- \"$@\"";
+        apps.default = env.app [ ] "zig build run --release=fast -- \"$@\"";
 
         # nix run .#build
-        apps.build = env.app [ ] "zig build \"$@\"";
+        apps.build = env.app [ ] "zig build --release=fast \"$@\"";
 
         # nix run .#test
-        apps.test = env.app [ ] "zig build test -- \"$@\"";
+        apps.test = env.app [ ] "zig build test --release=fast -- \"$@\"";
 
         # nix run .#docs
-        apps.docs = env.app [ ] "zig build docs -- \"$@\"";
+        apps.docs = env.app [ ] "zig build docs --release=fast -- \"$@\"";
 
         # nix run .#zig2nix
         apps.zig2nix = env.app [ ] "zig2nix \"$@\"";

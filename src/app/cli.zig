@@ -5,7 +5,7 @@ const Config = @import("init.zig").Config;
 
 pub fn cli(config: Config) !void {
     try tools.titleMaker("ZIX Configuration");
-    cmd.configPrint(config.repo, config.hostname, config.keep, tools.boolToString(config.update), tools.boolToString(config.diff));
+    cmd.configPrint(config);
 
     if (try tools.confirm(true, null)) {
         try tools.titleMaker("Git Pull");

@@ -66,7 +66,3 @@ pub fn confirm(comptime default_value: bool, comptime msg: ?[]const u8) !bool {
         return false;
     }
 }
-
-pub fn boolToString(b: bool) []const u8 {
-    return if (b) "true" else "false";
-}

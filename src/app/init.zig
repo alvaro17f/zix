@@ -2,7 +2,7 @@ const std = @import("std");
 const cli = @import("./cli.zig").cli;
 const eql = std.mem.eql;
 const style = @import("../utils/style.zig");
-const VERSION = @import("../main.zig").VERSION;
+const VERSION = @import("root").VERSION;
 
 pub const Config = struct {
     repo: []const u8,
@@ -31,7 +31,7 @@ fn printHelp() void {
 }
 
 fn printVersion() void {
-    std.debug.print("{s}\nZIX version: {s}{s}\n{s}", .{ style.Black, style.Cyan, VERSION, style.Reset });
+    std.debug.print("{s}\nZIX version: {s}{s}\n{s}", .{ style.Yellow, style.Cyan, VERSION, style.Reset });
 }
 
 fn getHostname(buffer: *[64]u8) []const u8 {

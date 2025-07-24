@@ -1,4 +1,5 @@
 const std = @import("std");
+const Arena = @import("allocator").Arena;
 const tools = @import("../utils/tools.zig");
 const cmd = @import("../utils/commands.zig");
 const Config = @import("init.zig").Config;
@@ -8,28 +9,32 @@ pub fn cli(config: Config) !void {
     cmd.configPrint(config);
 
     if (try tools.confirm(true, null)) {
+        var arena = Arena.init();
+        defer arena.deinit();
+        const allocator = arena.allocator();
+
         try tools.titleMaker("Git Pull");
-        _ = try tools.run(try cmd.gitPull(config.repo), .{});
+        _ = try tools.run(try cmd.gitPull(allocator, config.repo), .{});
 
         if (config.update) {
             try tools.titleMaker("Nix Update");
-            _ = try tools.run(try cmd.nixUpdate(config.repo), .{});
+            _ = try tools.run(try cmd.nixUpdate(allocator, config.repo), .{});
         }
 
-        if (try tools.run(try cmd.gitDiff(config.repo), .{ .output = false }) == 1) {
+        if (try tools.run(try cmd.gitDiff(allocator, config.repo), .{ .output = false }) == 1) {
             try tools.titleMaker("Git Changes");
-            _ = try tools.run(try cmd.gitStatus(config.repo), .{});
+            _ = try tools.run(try cmd.gitStatus(allocator, config.repo), .{});
 
             if (try tools.confirm(true, "Do you want to add these changes to the stage?")) {
-                _ = tools.run(try cmd.gitAdd(config.repo), .{}) catch |err| {
+                _ = tools.run(try cmd.gitAdd(allocator, config.repo), .{}) catch |err| {
                     std.debug.print("Failed to add changes to the stage: {}\n", .{err});
                 };
             }
         }
 
         try tools.titleMaker("Nixos Rebuild");
-        _ = try tools.run(try cmd.nixRebuild(config.repo, config.hostname), .{});
-        _ = try tools.run(try cmd.nixKeep(config.keep), .{});
+        _ = try tools.run(try cmd.nixRebuild(allocator, config.repo, config.hostname), .{});
+        _ = try tools.run(try cmd.nixKeep(allocator, config.keep), .{});
 
         if (config.diff) {
             try tools.titleMaker("Nix Diff");

@@ -1,4 +1,5 @@
 const std = @import("std");
+const allocator = @import("allocator").allocator;
 const cli = @import("./cli.zig").cli;
 const eql = std.mem.eql;
 const style = @import("../utils/style.zig");
@@ -38,7 +39,7 @@ fn getHostname(buffer: *[64]u8) []const u8 {
     return std.posix.gethostname(buffer) catch "unknown";
 }
 
-pub fn init(allocator: std.mem.Allocator) !void {
+pub fn init() !void {
     var hostname_buffer: [std.os.linux.HOST_NAME_MAX]u8 = undefined;
 
     var config = Config{

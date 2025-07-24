@@ -10,6 +10,14 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
     });
 
+    const allocator_mod = b.createModule(.{
+        .root_source_file = b.path("src/utils/allocator.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+
+    exe_mod.addImport("allocator", allocator_mod);
+
     const exe = b.addExecutable(.{
         .name = "zix",
         .root_module = exe_mod,

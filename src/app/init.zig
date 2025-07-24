@@ -1,5 +1,6 @@
 const std = @import("std");
 const allocator = @import("allocator").allocator;
+const fmt = @import("fmt");
 const cli = @import("./cli.zig").cli;
 const eql = std.mem.eql;
 const style = @import("../utils/style.zig");
@@ -13,8 +14,8 @@ pub const Config = struct {
     diff: bool,
 };
 
-fn printHelp() void {
-    std.debug.print(
+fn printHelp() !void {
+    try fmt.print(
         \\
         \\ *****************************************************
         \\  ZIX - A simple CLI tool to update your nixos system
@@ -31,8 +32,8 @@ fn printHelp() void {
     , .{});
 }
 
-fn printVersion() void {
-    std.debug.print("{s}\nZIX version: {s}{s}\n{s}", .{ style.Yellow, style.Cyan, VERSION, style.Reset });
+fn printVersion() !void {
+    try fmt.print("{s}\nZIX version: {s}{s}\n{s}", .{ style.Yellow, style.Cyan, VERSION, style.Reset });
 }
 
 fn getHostname(buffer: *[64]u8) []const u8 {
@@ -62,40 +63,40 @@ pub fn init() !void {
             for (arg[1..]) |flag| {
                 switch (flag) {
                     'h' => {
-                        return printHelp();
+                        return try printHelp();
                     },
                     'v' => {
-                        return printVersion();
+                        return try printVersion();
                     },
                     'd' => config.diff = true,
                     'u' => config.update = true,
                     'r', 'n', 'k' => {
                         if (idx + 2 >= args.len) {
-                            return std.debug.print("{s}Error: \"-{c}\" flag requires an argument\n{s}", .{ style.Red, flag, style.Reset });
+                            return try fmt.print("{s}Error: \"-{c}\" flag requires an argument\n{s}", .{ style.Red, flag, style.Reset });
                         }
                         if (flag == 'r') config.repo = args[idx + 2];
                         if (flag == 'n') config.hostname = args[idx + 2];
                         if (flag == 'k') {
                             const argument = args[idx + 2];
                             const number = std.fmt.parseInt(u8, argument, 10) catch {
-                                return std.debug.print("{s}Error: Value of \"-k\" flag is not numeric.\n{s}", .{ style.Red, style.Reset });
+                                return try fmt.print("{s}Error: Value of \"-k\" flag is not numeric.\n{s}", .{ style.Red, style.Reset });
                             };
                             config.keep = number;
                         }
                     },
-                    else => return std.debug.print("{s}Error: Unknown flag \"-{c}\"\n{s}", .{ style.Red, flag, style.Reset }),
+                    else => return try fmt.print("{s}Error: Unknown flag \"-{c}\"\n{s}", .{ style.Red, flag, style.Reset }),
                 }
             }
         } else if (idx == 0) {
             for (args[1..]) |argument| {
                 if (eql(u8, argument, "help")) {
-                    return printHelp();
+                    return try printHelp();
                 }
                 if (eql(u8, argument, "version")) {
-                    return printVersion();
+                    return try printVersion();
                 }
 
-                return std.debug.print("{s}Error: Unknown argument \"{s}\"\n{s}", .{ style.Red, argument, style.Reset });
+                return try fmt.print("{s}Error: Unknown argument \"{s}\"\n{s}", .{ style.Red, argument, style.Reset });
             }
         }
     }

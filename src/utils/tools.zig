@@ -1,4 +1,5 @@
 const std = @import("std");
+const fmt = @import("fmt");
 const eql = std.mem.eql;
 const style = @import("style.zig");
 const builtin = @import("builtin");
@@ -15,7 +16,7 @@ pub fn titleMaker(text: []const u8) !void {
         c.* = '*';
     }
 
-    std.debug.print("{s}\n{s}\n* {s}{s}{s} *\n{s}\n{s}", .{ style.Blue, border, style.Red, text, style.Blue, border, style.Reset });
+    try fmt.print("{s}\n{s}\n* {s}{s}{s} *\n{s}\n{s}", .{ style.Blue, border, style.Red, text, style.Blue, border, style.Reset });
 }
 
 pub fn run(command: []const u8, opts: struct { output: bool = true }) !i32 {
@@ -35,7 +36,7 @@ pub fn run(command: []const u8, opts: struct { output: bool = true }) !i32 {
         if (cmd.stdout) |stdout| {
             var stdout_stream = stdout.reader();
             while (try stdout_stream.readUntilDelimiterOrEofAlloc(allocator, '\n', 4096)) |line| {
-                std.debug.print("{s}\n", .{line});
+                try fmt.print("{s}\n", .{line});
             }
         }
     }

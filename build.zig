@@ -10,6 +10,14 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
     });
 
+    const fmt_mod = b.createModule(.{
+        .root_source_file = b.path("src/utils/fmt.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+
+    exe_mod.addImport("fmt", fmt_mod);
+
     const allocator_mod = b.createModule(.{
         .root_source_file = b.path("src/utils/allocator.zig"),
         .target = target,

@@ -1,16 +1,17 @@
 const std = @import("std");
+const allocator = @import("allocator").allocator;
 const fmt = @import("fmt");
 const eql = std.mem.eql;
 const style = @import("style.zig");
 const builtin = @import("builtin");
-
-const allocator = if (builtin.mode == .Debug) std.heap.page_allocator else std.heap.c_allocator;
 
 pub fn titleMaker(text: []const u8) !void {
     const border = allocator.alloc(u8, text.len + 4) catch |err| {
         std.log.err("Failed to allocate memory: {}", .{err});
         return err;
     };
+
+    defer allocator.free(border);
 
     for (border) |*c| {
         c.* = '*';
@@ -63,6 +64,7 @@ pub fn confirm(comptime default_value: bool, comptime msg: ?[]const u8) !bool {
     const stdin = &stdin_reader.interface;
     const line = try stdin.takeDelimiterExclusive('\n');
     const response = try std.ascii.allocLowerString(allocator, line);
+    defer allocator.free(response);
 
     if (eql(u8, response, "y") or eql(u8, response, "yes")) {
         return true;

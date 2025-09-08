@@ -34,9 +34,12 @@ pub fn run(command: []const u8, opts: struct { output: bool = true }) !i32 {
 
     if (opts.output) {
         if (cmd.stdout) |stdout| {
-            var stdout_stream = stdout.reader();
-            while (try stdout_stream.readUntilDelimiterOrEofAlloc(allocator, '\n', 4096)) |line| {
-                try fmt.print("{s}\n", .{line});
+            var stdout_buf: [4096]u8 = undefined;
+            var stdout_stream = stdout.readerStreaming(&stdout_buf);
+            const cmd_stdout = &stdout_stream.interface;
+            const line = try cmd_stdout.takeDelimiterExclusive('\n');
+            for (line) |l| {
+                try fmt.print("{}\n", .{l});
             }
         }
     }
@@ -50,16 +53,20 @@ pub fn confirm(comptime default_value: bool, comptime msg: ?[]const u8) !bool {
     const default_value_str = if (default_value == true) std.fmt.comptimePrint("{s}(Y/n){s}", .{ style.Green, style.Reset }) else std.fmt.comptimePrint("{s}(y/N){s}", .{ style.Red, style.Reset });
 
     if (msg) |value| {
-        _ = try std.io.getStdOut().write(std.fmt.comptimePrint("\n\n{s}{s}{s} {s}: ", .{ style.Yellow, value, style.Reset, default_value_str }));
+        _ = try fmt.print("\n\n{s}{s}{s} {s}: ", .{ style.Yellow, value, style.Reset, default_value_str });
     } else {
-        _ = try std.io.getStdOut().write(std.fmt.comptimePrint("\n\n{s}Proceed?{s} {s}: ", .{ style.Yellow, style.Reset, default_value_str }));
+        _ = try fmt.print("\n\n{s}Proceed?{s} {s}: ", .{ style.Yellow, style.Reset, default_value_str });
     }
 
-    var buffer: [3]u8 = undefined;
-    const response = try std.io.getStdIn().reader().readUntilDelimiterOrEof(&buffer, '\n') orelse "";
-    if (eql(u8, response, "y") or eql(u8, response, "Y")) {
+    var stdin_buf: [1024]u8 = undefined;
+    var stdin_reader = std.fs.File.stdin().reader(&stdin_buf);
+    const stdin = &stdin_reader.interface;
+    const line = try stdin.takeDelimiterExclusive('\n');
+    const response = try std.ascii.allocLowerString(allocator, line);
+
+    if (eql(u8, response, "y") or eql(u8, response, "yes")) {
         return true;
-    } else if (eql(u8, response, "n") or eql(u8, response, "N")) {
+    } else if (eql(u8, response, "n") or eql(u8, response, "no")) {
         return false;
     } else if (eql(u8, response, "\n") or eql(u8, response, "")) {
         return default_value;

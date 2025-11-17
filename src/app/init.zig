@@ -4,7 +4,7 @@ const fmt = @import("fmt");
 const cli = @import("./cli.zig").cli;
 const eql = std.mem.eql;
 const style = @import("../utils/style.zig");
-const VERSION = @import("root").VERSION;
+const VERSION = @import("zon").version;
 
 pub const Config = struct {
     repo: []const u8,

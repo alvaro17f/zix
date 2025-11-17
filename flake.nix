@@ -13,7 +13,7 @@
     (flake-utils.lib.eachDefaultSystem (
       system:
       let
-        env = zig2nix.outputs.zig-env.${system} { zig = zig2nix.outputs.packages.${system}.zig-0_15_1; };
+        env = zig2nix.outputs.zig-env.${system} { zig = zig2nix.outputs.packages.${system}.zig-0_15_2; };
       in
       with builtins;
       with env.pkgs.lib;
@@ -32,7 +32,7 @@
           }
           // optionalAttrs (!pathExists ./build.zig.zon) {
             pname = "zix";
-            version = "1.0.0";
+            version = "0.0.0";
           }
         );
 

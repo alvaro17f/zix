@@ -16,7 +16,12 @@ pub fn cli(config: Config) !void {
         const allocator = arena.allocator();
 
         try tools.titleMaker("Git Pull");
-        _ = try tools.run(try cmd.gitPull(allocator, config.repo), .{});
+        const git_pull_status = try tools.run(try cmd.gitPull(allocator, config.repo), .{});
+
+        if (git_pull_status != 0) {
+            try fmt.print("{s}Failed to pull changes{s}\n", .{ style.Red, style.Reset });
+            std.posix.exit(@intCast(git_pull_status));
+        }
 
         if (config.update) {
             try tools.titleMaker("Nix Update");

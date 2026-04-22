@@ -2,12 +2,15 @@
 
 ![](vhs/zix.gif)
 
-ZIX is a command line tool for managing NixOS configuration.
+CLI tool for managing NixOS configuration.
 
-> :warning: **Work in Progress**: This project is currently under development. Some features may not be complete and may change in the future.
+> :warning: **Work in Progress**: Under active development. Features may change.
+
+## Requirements
+
+- **Zig 0.16.0** or later
+
 ## Installation
-
-To install ZIX, you can clone the repository and compile the source code:
 
 ```sh
 git clone https://github.com/alvaro17f/zix.git
@@ -15,7 +18,7 @@ cd zix
 zig build run
 ```
 
-then move the binary to a directory in your PATH:
+Move binary to PATH:
 
 ```sh
 sudo mv zig-out/bin/zix <PATH>
@@ -23,15 +26,11 @@ sudo mv zig-out/bin/zix <PATH>
 
 ### NixOS
 
-#### Run
-To run ZIX, you can use the following command:
-
 ```sh
 nix run github:alvaro17f/zix#target.x86_64-linux-musl
 ```
 
-#### Flake
-Add zix to your flake.nix file:
+Add to flake:
 
 ```nix
 {
@@ -40,8 +39,6 @@ Add zix to your flake.nix file:
     };
 }
 ```
-
-then include it in your system configuration:
 
 ```nix
 { inputs, pkgs, ... }:
@@ -52,8 +49,34 @@ then include it in your system configuration:
 }
 ```
 
-## Usage
+## Taskfile
+
+Build tasks via `./taskfile`:
+
+| Task | Description |
+|---|---|
+| `./taskfile build` | Compile project |
+| `./taskfile run` | Execute binary |
+| `./taskfile test` | Run test suite |
+| `./taskfile coverage` | Run tests + kcov (100% line coverage) |
+| `./taskfile fmt` | Format Zig sources |
+| `./taskfile clean` | Remove build artifacts |
+| `./taskfile` | Show help |
+
+## Coverage
+
+100% line coverage enforced via **kcov**:
+
 ```sh
+./taskfile coverage
+# ✓ coverage: 100.00% (305/305 lines)
+```
+
+Tests run with LLVM backend (`.use_llvm = true`) for accurate DWARF instrumentation.
+
+## Usage
+
+```
  ***************************************************
  ZIX - A simple CLI tool to update your nixos system
  ***************************************************
@@ -66,6 +89,6 @@ then include it in your system configuration:
  -v, version : Display the current version
 ```
 
-
 ## License
-ZIX is distributed under the MIT license. See the LICENSE file for more information.
+
+MIT. See LICENSE.

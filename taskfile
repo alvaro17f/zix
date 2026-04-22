@@ -1,0 +1,33 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+cmd="${1:-default}"
+shift || true
+
+case "$cmd" in
+  build)
+    zig build --summary all
+    ;;
+  run)
+    ./zig-out/bin/zix "$@"
+    ;;
+  test)
+    ./zig-out/bin/zix-test
+    ;;
+  coverage)
+    rm -rf coverage
+    nix-shell -p kcov --run "kcov --include-pattern=src ./coverage ./zig-out/bin/zix-test"
+    ;;
+  vhs)
+    vhs ./vhs/zix.tape
+    ;;
+  default)
+    zig build --summary all
+    ./zig-out/bin/zix "$@"
+    ;;
+  *)
+    echo "unknown task: $cmd"
+    echo "usage: ./taskfile [build|run|test|coverage|vhs|default]"
+    exit 1
+    ;;
+esac

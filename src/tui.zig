@@ -1,6 +1,7 @@
 const std = @import("std");
 const Config = @import("app/config.zig").Config;
 const cli = @import("app/cli.zig");
+const style = @import("utils/style.zig");
 
 pub const Key = union(enum) {
     char: u8,
@@ -44,27 +45,55 @@ fn clear(writer: *std.Io.Writer) !void {
     try writer.flush();
 }
 
+const inner = 41;
+
+fn lineFmt(writer: *std.Io.Writer, buf: *[inner]u8, comptime fmt: []const u8, args: anytype) !void {
+    @memset(buf, ' ');
+    const n = std.fmt.bufPrint(buf, fmt, args) catch buf[0..0];
+    if (n.len < inner) @memset(buf[n.len..inner], ' ');
+    try writer.print("{s}│{s}{s}{s}│{s}\n", .{ style.Cyan, style.Reset, buf, style.Cyan, style.Reset });
+}
+
 fn renderScreen(writer: *std.Io.Writer, config: Config, items: []const []const u8, selected: u2) !void {
     try clear(writer);
-    try writer.print("==================================================\n", .{});
-    try writer.print("  ZIX Configuration\n", .{});
-    try writer.print("==================================================\n", .{});
-    try writer.print("  Repo:   {s}\n", .{config.repo});
-    try writer.print("  Host:   {s}\n", .{config.hostname});
-    try writer.print("  Keep:   {d}\n", .{config.keep});
-    try writer.print("  Update: {}\n", .{config.update});
-    try writer.print("  Diff:   {}\n", .{config.diff});
-    try writer.print("==================================================\n\n", .{});
+
+    var buf: [inner]u8 = undefined;
+
+    try writer.print("{s}┌─────────────────────────────────────────┐{s}\n", .{ style.Cyan, style.Reset });
+    try lineFmt(writer, &buf, "          Z I X  M A N A G E R           ", .{});
+    try writer.print("{s}├─────────────────────────────────────────┤{s}\n", .{ style.Cyan, style.Reset });
+
+    try lineFmt(writer, &buf, "  Repo:   {s}", .{config.repo});
+    try lineFmt(writer, &buf, "  Host:   {s}", .{config.hostname});
+    try lineFmt(writer, &buf, "  Keep:   {d}", .{config.keep});
+
+    const flags = if (config.update and config.diff) "update diff"
+        else if (config.update) "update"
+        else if (config.diff) "diff"
+        else "";
+    try lineFmt(writer, &buf, "  Flags:  {s}", .{flags});
+
+    try writer.print("{s}├─────────────────────────────────────────┤{s}\n", .{ style.Cyan, style.Reset });
 
     for (items, 0..) |item, i| {
-        const cursor = if (i == selected) "> " else "  ";
-        try writer.print("{s}[{d}] {s}\n", .{ cursor, i + 1, item });
+        var m: [inner]u8 = undefined;
+        @memset(&m, ' ');
+        const text = if (i == selected)
+            std.fmt.bufPrint(&m, "  > [{d}] {s}", .{ i + 1, item }) catch m[0..0]
+        else
+            std.fmt.bufPrint(&m, "   [{d}] {s}", .{ i + 1, item }) catch m[0..0];
+        if (text.len < inner) @memset(m[text.len..inner], ' ');
+        try writer.print("{s}│{s}{s}{s}│{s}\n", .{ style.Cyan, style.Reset, &m, style.Cyan, style.Reset });
     }
-    try writer.print("\nUse arrow keys or numbers. Enter to select.\n", .{});
+
+    try writer.print("{s}└─────────────────────────────────────────┘{s}\n", .{ style.Cyan, style.Reset });
+    try writer.print("\n{s}↑↓ navigate   Enter select   1-4 quick   q quit{s}\n", .{ style.Gray, style.Reset });
     try writer.flush();
 }
 
 pub fn run(io: std.Io, writer: *std.Io.Writer, reader: *std.Io.Reader, config: Config, deps: cli.Deps) !void {
+    var raw_enabled = false; var saved_termios: std.posix.termios = undefined; if (std.posix.tcgetattr(std.posix.STDIN_FILENO)) |saved| { saved_termios = saved; raw_enabled = true; var raw = saved; raw.lflag.ICANON = false; raw.lflag.ECHO = false; std.posix.tcsetattr(std.posix.STDIN_FILENO, .NOW, raw) catch {}; } else |_| {}
+    defer if (raw_enabled) std.posix.tcsetattr(std.posix.STDIN_FILENO, .NOW, saved_termios) catch {};
     const items = &[_][]const u8{ "Pull & Rebuild", "Update & Rebuild", "Diff", "Quit" };
     var selected: u2 = 0;
     var cfg = config;
@@ -163,7 +192,7 @@ test "mock functions direct cover" {
 }
 
 test "renderScreen shows config" {
-    var buf: [4096]u8 = undefined;
+    var buf: [32768]u8 = undefined;
     var writer = std.Io.Writer.fixed(&buf);
     const config = Config{ .repo = "r", .hostname = "h", .keep = 5, .update = true, .diff = false };
     try renderScreen(&writer, config, &.{ "A", "B" }, 0);
@@ -174,105 +203,105 @@ test "renderScreen shows config" {
 }
 
 test "tui run quits on q" {
-    var wbuf: [4096]u8 = undefined;
+    var wbuf: [32768]u8 = undefined;
     var writer = std.Io.Writer.fixed(&wbuf);
     var reader = std.Io.Reader.fixed("q");
     try run(std.testing.io, &writer, &reader, Config{ .repo = "r", .hostname = "h", .keep = 1, .update = false, .diff = false }, mock_deps);
 }
 
 test "tui run quits on 4" {
-    var wbuf: [4096]u8 = undefined;
+    var wbuf: [32768]u8 = undefined;
     var writer = std.Io.Writer.fixed(&wbuf);
     var reader = std.Io.Reader.fixed("4");
     try run(std.testing.io, &writer, &reader, Config{ .repo = "r", .hostname = "h", .keep = 1, .update = false, .diff = false }, mock_deps);
 }
 
 test "tui run option1 on enter" {
-    var wbuf: [4096]u8 = undefined;
+    var wbuf: [32768]u8 = undefined;
     var writer = std.Io.Writer.fixed(&wbuf);
     var reader = std.Io.Reader.fixed("\n");
     try run(std.testing.io, &writer, &reader, Config{ .repo = "r", .hostname = "h", .keep = 1, .update = false, .diff = false }, mock_deps);
 }
 
 test "tui run option2 after down" {
-    var wbuf: [4096]u8 = undefined;
+    var wbuf: [32768]u8 = undefined;
     var writer = std.Io.Writer.fixed(&wbuf);
     var reader = std.Io.Reader.fixed("\x1b[B\n");
     try run(std.testing.io, &writer, &reader, Config{ .repo = "r", .hostname = "h", .keep = 1, .update = false, .diff = false }, mock_deps);
 }
 
 test "tui run option3 after down twice" {
-    var wbuf: [4096]u8 = undefined;
+    var wbuf: [32768]u8 = undefined;
     var writer = std.Io.Writer.fixed(&wbuf);
     var reader = std.Io.Reader.fixed("\x1b[B\x1b[B\n");
     try run(std.testing.io, &writer, &reader, Config{ .repo = "r", .hostname = "h", .keep = 1, .update = false, .diff = false }, mock_deps);
 }
 
 test "tui run option4 after down three times" {
-    var wbuf: [4096]u8 = undefined;
+    var wbuf: [32768]u8 = undefined;
     var writer = std.Io.Writer.fixed(&wbuf);
     var reader = std.Io.Reader.fixed("\x1b[B\x1b[B\x1b[B\n");
     try run(std.testing.io, &writer, &reader, Config{ .repo = "r", .hostname = "h", .keep = 1, .update = false, .diff = false }, mock_deps);
 }
 
 test "tui run option1 on char 1" {
-    var wbuf: [4096]u8 = undefined;
+    var wbuf: [32768]u8 = undefined;
     var writer = std.Io.Writer.fixed(&wbuf);
     var reader = std.Io.Reader.fixed("1");
     try run(std.testing.io, &writer, &reader, Config{ .repo = "r", .hostname = "h", .keep = 1, .update = false, .diff = false }, mock_deps);
 }
 
 test "tui run option2 on char 2" {
-    var wbuf: [4096]u8 = undefined;
+    var wbuf: [32768]u8 = undefined;
     var writer = std.Io.Writer.fixed(&wbuf);
     var reader = std.Io.Reader.fixed("2");
     try run(std.testing.io, &writer, &reader, Config{ .repo = "r", .hostname = "h", .keep = 1, .update = false, .diff = false }, mock_deps);
 }
 
 test "tui run option3 on char 3" {
-    var wbuf: [4096]u8 = undefined;
+    var wbuf: [32768]u8 = undefined;
     var writer = std.Io.Writer.fixed(&wbuf);
     var reader = std.Io.Reader.fixed("3");
     try run(std.testing.io, &writer, &reader, Config{ .repo = "r", .hostname = "h", .keep = 1, .update = false, .diff = false }, mock_deps);
 }
 
 test "tui run ignores unknown char then enter" {
-    var wbuf: [4096]u8 = undefined;
+    var wbuf: [32768]u8 = undefined;
     var writer = std.Io.Writer.fixed(&wbuf);
     var reader = std.Io.Reader.fixed("x\n");
     try run(std.testing.io, &writer, &reader, Config{ .repo = "r", .hostname = "h", .keep = 1, .update = false, .diff = false }, mock_deps);
 }
 
 test "tui run down past bottom then enter" {
-    var wbuf: [4096]u8 = undefined;
+    var wbuf: [32768]u8 = undefined;
     var writer = std.Io.Writer.fixed(&wbuf);
     var reader = std.Io.Reader.fixed("\x1b[B\x1b[B\x1b[B\x1b[B\n");
     try run(std.testing.io, &writer, &reader, Config{ .repo = "r", .hostname = "h", .keep = 1, .update = false, .diff = false }, mock_deps);
 }
 
 test "tui run up at top then enter" {
-    var wbuf: [4096]u8 = undefined;
+    var wbuf: [32768]u8 = undefined;
     var writer = std.Io.Writer.fixed(&wbuf);
     var reader = std.Io.Reader.fixed("\x1b[A\n");
     try run(std.testing.io, &writer, &reader, Config{ .repo = "r", .hostname = "h", .keep = 1, .update = false, .diff = false }, mock_deps);
 }
 
 test "tui run down then up then enter" {
-    var wbuf: [4096]u8 = undefined;
+    var wbuf: [32768]u8 = undefined;
     var writer = std.Io.Writer.fixed(&wbuf);
     var reader = std.Io.Reader.fixed("\x1b[B\x1b[A\n");
     try run(std.testing.io, &writer, &reader, Config{ .repo = "r", .hostname = "h", .keep = 1, .update = false, .diff = false }, mock_deps);
 }
 
 test "tui run escape then enter" {
-    var wbuf: [4096]u8 = undefined;
+    var wbuf: [32768]u8 = undefined;
     var writer = std.Io.Writer.fixed(&wbuf);
     var reader = std.Io.Reader.fixed("\x1b\n");
     try run(std.testing.io, &writer, &reader, Config{ .repo = "r", .hostname = "h", .keep = 1, .update = false, .diff = false }, mock_deps);
 }
 
 test "tui run empty input returns" {
-    var wbuf: [4096]u8 = undefined;
+    var wbuf: [32768]u8 = undefined;
     var writer = std.Io.Writer.fixed(&wbuf);
     var reader = std.Io.Reader.fixed("");
     try run(std.testing.io, &writer, &reader, Config{ .repo = "r", .hostname = "h", .keep = 1, .update = false, .diff = false }, mock_deps);

@@ -38,10 +38,12 @@ pub fn main(init: std.process.Init) !void {
 test {
     _ = @import("app/init.zig");
     _ = @import("app/cli.zig");
+    _ = @import("app/config.zig");
     _ = @import("utils/allocator.zig");
     _ = @import("utils/fmt.zig");
     _ = @import("utils/style.zig");
     _ = @import("utils/commands.zig");
     _ = @import("utils/tools.zig");
     _ = @import("zon");
+    _ = @import("tui.zig");
 }

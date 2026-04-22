@@ -6,14 +6,8 @@ const cli = cli_module.cli;
 const eql = std.mem.eql;
 const style = @import("../utils/style.zig");
 const VERSION = @import("zon").version;
-
-pub const Config = struct {
-    repo: []const u8,
-    hostname: []const u8,
-    keep: u8,
-    update: bool,
-    diff: bool,
-};
+const Config = @import("config.zig").Config;
+const tui = @import("../tui.zig");
 
 pub fn printHelp(writer: *std.Io.Writer) !void {
     try fmt.printTo(writer,
@@ -26,6 +20,7 @@ pub fn printHelp(writer: *std.Io.Writer) !void {
         \\ -k : set generations to keep (default is 10)
         \\ -u : set update to true (default is false)
         \\ -d : set diff to true (default is false)
+        \\ --tui : launch TUI mode
         \\ -h, help : Display this help message
         \\ -v, version : Display the current version
         \\
@@ -50,6 +45,7 @@ pub fn run(io: std.Io, writer: *std.Io.Writer, reader: *std.Io.Reader, args: []c
         .keep = 10,
         .update = false,
         .diff = false,
+        .tui = false,
     };
 
     if (args.len <= 1) {
@@ -57,6 +53,10 @@ pub fn run(io: std.Io, writer: *std.Io.Writer, reader: *std.Io.Reader, args: []c
     }
 
     for (args[1..], 0..) |arg, idx| {
+        if (eql(u8, arg, "--tui")) {
+            config.tui = true;
+            continue;
+        }
         if (arg[0] == '-') {
             for (arg[1..]) |flag| {
                 switch (flag) {
@@ -68,6 +68,7 @@ pub fn run(io: std.Io, writer: *std.Io.Writer, reader: *std.Io.Reader, args: []c
                     },
                     'd' => config.diff = true,
                     'u' => config.update = true,
+                    't' => config.tui = true,
                     'r', 'n', 'k' => {
                         if (idx + 2 >= args.len) {
                             return try fmt.printTo(writer, "{s}Error: \"-{c}\" flag requires an argument\n{s}", .{ style.Red, flag, style.Reset });
@@ -96,6 +97,10 @@ pub fn run(io: std.Io, writer: *std.Io.Writer, reader: *std.Io.Reader, args: []c
                 return try fmt.printTo(writer, "{s}Error: Unknown argument \"{s}\"\n{s}", .{ style.Red, argument, style.Reset });
             }
         }
+    }
+
+    if (config.tui) {
+        return try tui.run(io, writer, reader, config, deps);
     }
 
     return try cli(io, writer, reader, config, deps);
@@ -147,6 +152,8 @@ test "run flag branches" {
         .{ .args = &.{ "zix", "-x" }, .expect_contains = "Unknown flag" },
         .{ .args = &.{ "zix", "-d" }, .expect_contains = null },
         .{ .args = &.{ "zix", "-u" }, .expect_contains = null },
+        .{ .args = &.{ "zix", "-t" }, .expect_contains = null },
+        .{ .args = &.{ "zix", "--tui" }, .expect_contains = null },
     };
 
     const mock_deps = cli_module.Deps{
@@ -159,7 +166,8 @@ test "run flag branches" {
     for (cases) |tc| {
         var buf: [2048]u8 = undefined;
         var writer = std.Io.Writer.fixed(&buf);
-        run(io, &writer, std.Io.Reader.ending, tc.args, mock_deps) catch continue;
+        var empty_reader = std.Io.Reader.fixed("");
+        run(io, &writer, &empty_reader, tc.args, mock_deps) catch continue;
         if (tc.expect_contains) |needle| {
             const out = std.mem.sliceTo(&buf, 0);
             try std.testing.expect(std.mem.indexOf(u8, out, needle) != null);
@@ -171,6 +179,7 @@ test "run reaches cli" {
     const io = std.testing.io;
     var buf: [256]u8 = undefined;
     var writer = std.Io.Writer.fixed(&buf);
+    var reader = std.Io.Reader.fixed("");
 
     const mock_deps = cli_module.Deps{
         .run = mockRun,
@@ -179,5 +188,21 @@ test "run reaches cli" {
         .configPrint = mockConfigPrint,
     };
 
-    try run(io, &writer, std.Io.Reader.ending, &.{"zix"}, mock_deps);
+    try run(io, &writer, &reader, &.{"zix"}, mock_deps);
+}
+
+test "run --tui flag dispatches" {
+    const io = std.testing.io;
+    var buf: [4096]u8 = undefined;
+    var writer = std.Io.Writer.fixed(&buf);
+    var reader = std.Io.Reader.fixed("");
+
+    const mock_deps = cli_module.Deps{
+        .run = mockRun,
+        .confirm = mockConfirm,
+        .titleMaker = mockTitleMaker,
+        .configPrint = mockConfigPrint,
+    };
+
+    try run(io, &writer, &reader, &.{"zix", "--tui"}, mock_deps);
 }

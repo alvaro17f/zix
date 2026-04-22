@@ -1,5 +1,5 @@
 const std = @import("std");
-const fmt = @import("fmt");
+const fmt = @import("fmt.zig");
 const style = @import("style.zig");
 const builtin = @import("builtin");
 const Config = @import("../app/init.zig").Config;
@@ -59,19 +59,32 @@ pub const nixDiff = "nix profile diff-closures --profile /nix/var/nix/profiles/s
 
 test "command strings" {
     const alloc = std.testing.allocator;
-    try std.testing.expectEqualStrings("git -C /repo pull", try gitPull(alloc, "/repo"));
-    try std.testing.expectEqualStrings("git -C /repo diff --exit-code", try gitDiff(alloc, "/repo"));
-    try std.testing.expectEqualStrings("git -C /repo status --porcelain", try gitStatus(alloc, "/repo"));
-    try std.testing.expectEqualStrings("git -C /repo add .", try gitAdd(alloc, "/repo"));
-    try std.testing.expectEqualStrings("nix flake update --flake /repo", try nixUpdate(alloc, "/repo"));
-    try std.testing.expectEqualStrings("sudo nixos-rebuild switch --flake /repo#host --show-trace", try nixRebuild(alloc, "/repo", "host"));
-    try std.testing.expectEqualStrings("sudo nix-env --profile /nix/var/nix/profiles/system --delete-generations +5", try nixKeep(alloc, 5));
+    const s0 = try gitPull(alloc, "/repo");
+    defer alloc.free(s0);
+    try std.testing.expectEqualStrings("git -C /repo pull", s0);
+    const s1 = try gitDiff(alloc, "/repo");
+    defer alloc.free(s1);
+    try std.testing.expectEqualStrings("git -C /repo diff --exit-code", s1);
+    const s2 = try gitStatus(alloc, "/repo");
+    defer alloc.free(s2);
+    try std.testing.expectEqualStrings("git -C /repo status --porcelain", s2);
+    const s3 = try gitAdd(alloc, "/repo");
+    defer alloc.free(s3);
+    try std.testing.expectEqualStrings("git -C /repo add .", s3);
+    const s4 = try nixUpdate(alloc, "/repo");
+    defer alloc.free(s4);
+    try std.testing.expectEqualStrings("nix flake update --flake /repo", s4);
+    const s5 = try nixRebuild(alloc, "/repo", "host");
+    defer alloc.free(s5);
+    try std.testing.expectEqualStrings("sudo nixos-rebuild switch --flake /repo#host --show-trace", s5);
+    const s6 = try nixKeep(alloc, 5);
+    defer alloc.free(s6);
+    try std.testing.expectEqualStrings("sudo nix-env --profile /nix/var/nix/profiles/system --delete-generations +5", s6);
 }
 
 test "configPrint renders all fields" {
     var buf: [1024]u8 = undefined;
-    const io = std.testing.io;
-    var writer = std.Io.File.stdout().writer(io, &buf);
+    var writer = std.Io.Writer.fixed(&buf);
     const config = Config{
         .repo = "~/.dotfiles",
         .hostname = "nixos",

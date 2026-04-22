@@ -14,20 +14,6 @@ pub fn build(b: *std.Build) void {
         .link_libc = true,
     });
 
-    const fmt_mod = b.createModule(.{
-        .root_source_file = b.path("src/utils/fmt.zig"),
-        .target = target,
-        .optimize = optimize,
-    });
-    exe_mod.addImport("fmt", fmt_mod);
-
-    const allocator_mod = b.createModule(.{
-        .root_source_file = b.path("src/utils/allocator.zig"),
-        .target = target,
-        .optimize = optimize,
-    });
-    exe_mod.addImport("allocator", allocator_mod);
-
     const zon_mod = b.createModule(.{
         .root_source_file = b.path("build.zig.zon"),
     });
@@ -54,13 +40,12 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
         .link_libc = true,
     });
-    test_mod.addImport("fmt", fmt_mod);
-    test_mod.addImport("allocator", allocator_mod);
     test_mod.addImport("zon", zon_mod);
 
     const test_compile = b.addTest(.{
         .name = "zix-test",
         .root_module = test_mod,
+        .use_llvm = true,
     });
     b.installArtifact(test_compile);
 

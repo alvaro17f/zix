@@ -1,6 +1,9 @@
 const std = @import("std");
-const detectLeaks = @import("allocator").detectLeaks;
+const detectLeaks = @import("utils/allocator.zig").detectLeaks;
 const app = @import("app/init.zig");
+const cli = @import("app/cli.zig");
+const tools = @import("utils/tools.zig");
+const cmd = @import("utils/commands.zig");
 const builtin = @import("builtin");
 
 pub fn main(init: std.process.Init) !void {
@@ -22,5 +25,23 @@ pub fn main(init: std.process.Init) !void {
     const stdin_file = std.Io.File.stdin();
     var stdin_reader = stdin_file.reader(init.io, &stdin_buf);
 
-    try app.run(init.io, &stdout_writer.interface, &stdin_reader.interface, args_list.items);
+    const deps = cli.Deps{
+        .run = tools.run,
+        .confirm = tools.confirm,
+        .titleMaker = tools.titleMaker,
+        .configPrint = cmd.configPrint,
+    };
+
+    try app.run(init.io, &stdout_writer.interface, &stdin_reader.interface, args_list.items, deps);
+}
+
+test {
+    _ = @import("app/init.zig");
+    _ = @import("app/cli.zig");
+    _ = @import("utils/allocator.zig");
+    _ = @import("utils/fmt.zig");
+    _ = @import("utils/style.zig");
+    _ = @import("utils/commands.zig");
+    _ = @import("utils/tools.zig");
+    _ = @import("zon");
 }

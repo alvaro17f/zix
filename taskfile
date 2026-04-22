@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-cmd="${1:-default}"
+cmd="${1:-help}"
 shift || true
 
 case "$cmd" in
@@ -25,9 +25,17 @@ case "$cmd" in
     zig build --summary all
     ./zig-out/bin/zix "$@"
     ;;
-  *)
-    echo "unknown task: $cmd"
-    echo "usage: ./taskfile [build|run|test|coverage|vhs|default]"
-    exit 1
+  help|*)
+    cat <<'EOF'
+usage: ./taskfile <task>
+
+tasks:
+  build    zig build --summary all
+  run      ./zig-out/bin/zix <args>
+  test     ./zig-out/bin/zix-test
+  coverage kcov instrumentation run
+  vhs      record demo tape
+  default  build + run
+EOF
     ;;
 esac

@@ -9,3 +9,12 @@ pub const Black = "\x1b[30m";
 pub const Reset = "\x1b[0m";
 pub const Bold = "\x1b[1m";
 pub const Underline = "\x1b[4m";
+
+test "style constants are non-empty" {
+    const std = @import("std");
+    const fields = @typeInfo(@This()).@"struct".fields;
+    inline for (fields) |field| {
+        const val = @field(@This(), field.name);
+        try std.testing.expect(val.len > 0);
+    }
+}

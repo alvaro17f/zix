@@ -14,8 +14,8 @@ pub const Config = struct {
     diff: bool,
 };
 
-fn printHelp() !void {
-    try fmt.print(
+pub fn printHelp(writer: *std.Io.Writer) !void {
+    try fmt.printTo(writer,
         \\
         \\ *****************************************************
         \\  ZIX - A simple CLI tool to update your nixos system
@@ -32,16 +32,16 @@ fn printHelp() !void {
     , .{});
 }
 
-fn printVersion() !void {
-    try fmt.print("{s}\nZIX version: {s}{s}\n{s}", .{ style.Yellow, style.Cyan, VERSION, style.Reset });
+pub fn printVersion(writer: *std.Io.Writer) !void {
+    try fmt.printTo(writer, "{s}\nZIX version: {s}{s}\n{s}", .{ style.Yellow, style.Cyan, VERSION, style.Reset });
 }
 
-fn getHostname(buffer: *[64]u8) []const u8 {
+pub fn getHostname(buffer: *[64]u8) []const u8 {
     return std.posix.gethostname(buffer) catch "unknown";
 }
 
-pub fn init() !void {
-    var hostname_buffer: [std.os.linux.HOST_NAME_MAX]u8 = undefined;
+pub fn run(io: std.Io, writer: *std.Io.Writer, reader: *std.Io.Reader, args: []const []const u8) !void {
+    var hostname_buffer: [std.posix.HOST_NAME_MAX]u8 = undefined;
 
     var config = Config{
         .repo = "~/.dotfiles",
@@ -51,11 +51,8 @@ pub fn init() !void {
         .diff = false,
     };
 
-    const args = try std.process.argsAlloc(allocator);
-    defer std.process.argsFree(allocator, args);
-
     if (args.len <= 1) {
-        return try cli(config);
+        return try cli(io, writer, reader, config);
     }
 
     for (args[1..], 0..) |arg, idx| {
@@ -63,43 +60,93 @@ pub fn init() !void {
             for (arg[1..]) |flag| {
                 switch (flag) {
                     'h' => {
-                        return try printHelp();
+                        return try printHelp(writer);
                     },
                     'v' => {
-                        return try printVersion();
+                        return try printVersion(writer);
                     },
                     'd' => config.diff = true,
                     'u' => config.update = true,
                     'r', 'n', 'k' => {
                         if (idx + 2 >= args.len) {
-                            return try fmt.print("{s}Error: \"-{c}\" flag requires an argument\n{s}", .{ style.Red, flag, style.Reset });
+                            return try fmt.printTo(writer, "{s}Error: \"-{c}\" flag requires an argument\n{s}", .{ style.Red, flag, style.Reset });
                         }
                         if (flag == 'r') config.repo = args[idx + 2];
                         if (flag == 'n') config.hostname = args[idx + 2];
                         if (flag == 'k') {
                             const argument = args[idx + 2];
                             const number = std.fmt.parseInt(u8, argument, 10) catch {
-                                return try fmt.print("{s}Error: Value of \"-k\" flag is not numeric.\n{s}", .{ style.Red, style.Reset });
+                                return try fmt.printTo(writer, "{s}Error: Value of \"-k\" flag is not numeric.\n{s}", .{ style.Red, style.Reset });
                             };
                             config.keep = number;
                         }
                     },
-                    else => return try fmt.print("{s}Error: Unknown flag \"-{c}\"\n{s}", .{ style.Red, flag, style.Reset }),
+                    else => return try fmt.printTo(writer, "{s}Error: Unknown flag \"-{c}\"\n{s}", .{ style.Red, flag, style.Reset }),
                 }
             }
         } else if (idx == 0) {
             for (args[1..]) |argument| {
                 if (eql(u8, argument, "help")) {
-                    return try printHelp();
+                    return try printHelp(writer);
                 }
                 if (eql(u8, argument, "version")) {
-                    return try printVersion();
+                    return try printVersion(writer);
                 }
-
-                return try fmt.print("{s}Error: Unknown argument \"{s}\"\n{s}", .{ style.Red, argument, style.Reset });
+                return try fmt.printTo(writer, "{s}Error: Unknown argument \"{s}\"\n{s}", .{ style.Red, argument, style.Reset });
             }
         }
     }
 
-    return try cli(config);
+    return try cli(io, writer, reader, config);
+}
+
+test "printHelp writes help text" {
+    var buf: [2048]u8 = undefined;
+    var writer = std.Io.Writer.fixed(&buf);
+    try printHelp(&writer);
+    const out = std.mem.sliceTo(&buf, 0);
+    try std.testing.expect(std.mem.indexOf(u8, out, "ZIX") != null);
+}
+
+test "printVersion writes version" {
+    var buf: [256]u8 = undefined;
+    var writer = std.Io.Writer.fixed(&buf);
+    try printVersion(&writer);
+    const out = std.mem.sliceTo(&buf, 0);
+    try std.testing.expect(std.mem.indexOf(u8, out, VERSION) != null);
+}
+
+test "getHostname non-empty" {
+    var buf: [64]u8 = undefined;
+    const h = getHostname(&buf);
+    try std.testing.expect(h.len > 0);
+}
+
+test "run flag branches" {
+    const io = std.testing.io;
+    const TestCase = struct {
+        args: []const []const u8,
+        expect_contains: ?[]const u8 = null,
+    };
+    const cases = &[_]TestCase{
+        .{ .args = &.{ "zix", "-h" }, .expect_contains = "ZIX" },
+        .{ .args = &.{ "zix", "-v" }, .expect_contains = VERSION },
+        .{ .args = &.{ "zix", "help" }, .expect_contains = "ZIX" },
+        .{ .args = &.{ "zix", "version" }, .expect_contains = VERSION },
+        .{ .args = &.{ "zix", "unknown" }, .expect_contains = "Unknown argument" },
+        .{ .args = &.{ "zix", "-r" }, .expect_contains = "requires an argument" },
+        .{ .args = &.{ "zix", "-n" }, .expect_contains = "requires an argument" },
+        .{ .args = &.{ "zix", "-k", "abc" }, .expect_contains = "not numeric" },
+        .{ .args = &.{ "zix", "-k", "5" }, .expect_contains = null },
+        .{ .args = &.{ "zix", "-x" }, .expect_contains = "Unknown flag" },
+    };
+    for (cases) |tc| {
+        var buf: [2048]u8 = undefined;
+        var writer = std.Io.Writer.fixed(&buf);
+        run(io, &writer, std.Io.Reader.ending, tc.args) catch continue;
+        if (tc.expect_contains) |needle| {
+            const out = std.mem.sliceTo(&buf, 0);
+            try std.testing.expect(std.mem.indexOf(u8, out, needle) != null);
+        }
+    }
 }

@@ -1,9 +1,14 @@
 const std = @import("std");
 
-pub fn print(comptime fmt: []const u8, args: anytype) !void {
-    var stdout_buf: [20]u8 = undefined;
-    var stdout_writer = std.fs.File.stdout().writer(&stdout_buf);
-    const stdout = &stdout_writer.interface;
-    try stdout.print(fmt, args);
-    try stdout.flush();
+pub fn printTo(writer: *std.Io.Writer, comptime format: []const u8, args: anytype) !void {
+    try writer.print(format, args);
+    try writer.flush();
+}
+
+test "printTo writes exact bytes" {
+    var buf: [256]u8 = undefined;
+    const io = std.testing.io;
+    var writer = std.Io.File.stdout().writer(io, &buf);
+    try printTo(&writer, "hello {d} {s}", .{ 42, "world" });
+    try std.testing.expectEqualStrings("hello 42 world", buf[0..14]);
 }

@@ -119,9 +119,7 @@ main() {
         default)  task_default "$@" ;;
         help|--help|-h) task_help ;;
         *)
-            err "unknown task: $cmd"
-            task_help
-            exit 1
+            task_run "$cmd" "$@"
             ;;
     esac
 }

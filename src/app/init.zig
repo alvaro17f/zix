@@ -101,15 +101,6 @@ pub fn run(io: std.Io, writer: *std.Io.Writer, reader: *std.Io.Reader, args: []c
     return try cli(io, writer, reader, config, deps);
 }
 
-noinline fn mockRun(_: std.Io, _: []const u8, _: cli_module.RunOpts) anyerror!i32 {
-    var x: i32 = 0;
-    x += 1;
-    return x - 1;
-}
-fn mockConfirm(_: *std.Io.Reader, _: *std.Io.Writer, _: bool, _: ?[]const u8) anyerror!bool { return false; }
-fn mockTitleMaker(_: *std.Io.Writer, _: []const u8) anyerror!void {}
-fn mockConfigPrint(_: *std.Io.Writer, _: Config) anyerror!void {}
-
 test "printHelp writes help text" {
     var buf: [2048]u8 = undefined;
     var writer = std.Io.Writer.fixed(&buf);
@@ -154,10 +145,10 @@ test "run flag branches" {
     };
 
     const mock_deps = cli_module.Deps{
-        .run = mockRun,
-        .confirm = mockConfirm,
-        .titleMaker = mockTitleMaker,
-        .configPrint = mockConfigPrint,
+        .run = struct { fn f(_: std.Io, _: []const u8, _: cli_module.RunOpts) anyerror!i32 { return 0; } }.f,
+        .confirm = struct { fn f(_: *std.Io.Reader, _: *std.Io.Writer, _: bool, _: ?[]const u8) anyerror!bool { return false; } }.f,
+        .titleMaker = struct { fn f(_: *std.Io.Writer, _: []const u8) anyerror!void {} }.f,
+        .configPrint = struct { fn f(_: *std.Io.Writer, _: Config) anyerror!void {} }.f,
     };
 
     for (cases) |tc| {
@@ -177,10 +168,10 @@ test "run reaches cli" {
     var writer = std.Io.Writer.fixed(&buf);
 
     const mock_deps = cli_module.Deps{
-        .run = mockRun,
-        .confirm = mockConfirm,
-        .titleMaker = mockTitleMaker,
-        .configPrint = mockConfigPrint,
+        .run = struct { fn f(_: std.Io, _: []const u8, _: cli_module.RunOpts) anyerror!i32 { return 0; } }.f,
+        .confirm = struct { fn f(_: *std.Io.Reader, _: *std.Io.Writer, _: bool, _: ?[]const u8) anyerror!bool { return false; } }.f,
+        .titleMaker = struct { fn f(_: *std.Io.Writer, _: []const u8) anyerror!void {} }.f,
+        .configPrint = struct { fn f(_: *std.Io.Writer, _: Config) anyerror!void {} }.f,
     };
 
     try run(io, &writer, std.Io.Reader.ending, &.{"zix"}, mock_deps);

@@ -87,7 +87,7 @@ fn renderScreen(writer: *std.Io.Writer, config: Config, items: []const []const u
     }
 
     try writer.print("{s}└─────────────────────────────────────────┘{s}\n", .{ style.Cyan, style.Reset });
-    try writer.print("\n{s}↑↓ navigate   Enter select   1-4 quick   q quit{s}\n", .{ style.Gray, style.Reset });
+    try writer.print("\n{s}↑↓ jk navigate   Enter select   1-4 quick   q quit{s}\n", .{ style.Gray, style.Reset });
     try writer.flush();
 }
 
@@ -120,6 +120,8 @@ pub fn run(io: std.Io, writer: *std.Io.Writer, reader: *std.Io.Reader, config: C
                     '2' => { cfg.update = true; cfg.diff = false; return try cli.workflow(io, writer, reader, cfg, deps); },
                     '3' => { cfg.update = false; cfg.diff = true; return try cli.workflow(io, writer, reader, cfg, deps); },
                     '4', 'q' => return,
+                    'j' => if (@as(usize, selected) + 1 < items.len) { selected += 1; },
+                    'k' => if (selected > 0) { selected -= 1; },
                     else => {},
                 }
             },
@@ -262,6 +264,27 @@ test "tui run option3 on char 3" {
     var wbuf: [32768]u8 = undefined;
     var writer = std.Io.Writer.fixed(&wbuf);
     var reader = std.Io.Reader.fixed("3");
+    try run(std.testing.io, &writer, &reader, Config{ .repo = "r", .hostname = "h", .keep = 1, .update = false, .diff = false }, mock_deps);
+}
+
+test "tui run j moves down then enter" {
+    var wbuf: [32768]u8 = undefined;
+    var writer = std.Io.Writer.fixed(&wbuf);
+    var reader = std.Io.Reader.fixed("j\n");
+    try run(std.testing.io, &writer, &reader, Config{ .repo = "r", .hostname = "h", .keep = 1, .update = false, .diff = false }, mock_deps);
+}
+
+test "tui run k moves up after j then enter" {
+    var wbuf: [32768]u8 = undefined;
+    var writer = std.Io.Writer.fixed(&wbuf);
+    var reader = std.Io.Reader.fixed("jk\n");
+    try run(std.testing.io, &writer, &reader, Config{ .repo = "r", .hostname = "h", .keep = 1, .update = false, .diff = false }, mock_deps);
+}
+
+test "tui run j at bottom stays" {
+    var wbuf: [32768]u8 = undefined;
+    var writer = std.Io.Writer.fixed(&wbuf);
+    var reader = std.Io.Reader.fixed("jjjj\n");
     try run(std.testing.io, &writer, &reader, Config{ .repo = "r", .hostname = "h", .keep = 1, .update = false, .diff = false }, mock_deps);
 }
 

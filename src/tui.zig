@@ -40,66 +40,92 @@ fn readKey(reader: *std.Io.Reader) Key {
     return .{ .char = b };
 }
 
+fn getTermSize() struct { cols: u16, rows: u16 } {
+    var tc: u16 = 80; var tr: u16 = 24; var ws: std.posix.winsize = undefined;
+    if (std.c.ioctl(std.posix.STDIN_FILENO, @as(c_int, 0x5413), &ws) >= 0) { tc = @max(ws.col, 30); tr = @max(ws.row, 10); }
+    return .{ .cols = tc, .rows = tr };
+}
+
 fn clear(writer: *std.Io.Writer) !void {
     try writer.print("\x1b[2J\x1b[H", .{});
     try writer.flush();
 }
 
-const inner = 41;
-
-fn lineFmt(writer: *std.Io.Writer, buf: *[inner]u8, comptime fmt: []const u8, args: anytype) !void {
-    @memset(buf, ' ');
-    const n = std.fmt.bufPrint(buf, fmt, args) catch buf[0..0];
-    if (n.len < inner) @memset(buf[n.len..inner], ' ');
-    try writer.print("{s}│{s}{s}{s}│{s}\n", .{ style.Cyan, style.Reset, buf, style.Cyan, style.Reset });
+fn lineFmt(writer: *std.Io.Writer, buf: []u8, comptime fmt: []const u8, args: anytype) !void {
+    const width = buf.len;
+    @memset(buf[0..width], ' ');
+    const n = std.fmt.bufPrint(buf[0..width], fmt, args) catch buf[0..0];
+    if (n.len < width) @memset(buf[n.len..width], ' ');
+    try writer.print("{s}│{s}{s}{s}│{s}\n", .{ style.Cyan, style.Reset, buf[0..width], style.Cyan, style.Reset });
 }
 
-fn renderScreen(writer: *std.Io.Writer, config: Config, items: []const []const u8, selected: u2) !void {
+fn hline(writer: *std.Io.Writer, left: []const u8, right: []const u8, width: usize) !void {
+    try writer.print("{s}{s}", .{ style.Cyan, left });
+    var i: usize = 0;
+    while (i < width) : (i += 1) {
+        try writer.writeAll("─");
+    }
+    try writer.print("{s}{s}\n", .{ right, style.Reset });
+}
+
+fn renderScreen(writer: *std.Io.Writer, config: Config, items: []const []const u8, selected: u2, cols: u16, rows: u16) !void {
     try clear(writer);
 
-    var buf: [inner]u8 = undefined;
+    const inner: usize = @max(@as(u16, 30), cols) - 2;
+    var buf: [4096]u8 = undefined;
+    const slot = buf[0..inner];
 
-    try writer.print("{s}┌─────────────────────────────────────────┐{s}\n", .{ style.Cyan, style.Reset });
-    try lineFmt(writer, &buf, "          Z I X  M A N A G E R           ", .{});
-    try writer.print("{s}├─────────────────────────────────────────┤{s}\n", .{ style.Cyan, style.Reset });
+    try hline(writer, "┌", "┐", inner);
+    try lineFmt(writer, slot, "  Z I X  M A N A G E R", .{});
+    try hline(writer, "├", "┤", inner);
 
-    try lineFmt(writer, &buf, "  Repo:   {s}", .{config.repo});
-    try lineFmt(writer, &buf, "  Host:   {s}", .{config.hostname});
-    try lineFmt(writer, &buf, "  Keep:   {d}", .{config.keep});
+    try lineFmt(writer, slot, "  Repo:   {s}", .{config.repo});
+    try lineFmt(writer, slot, "  Host:   {s}", .{config.hostname});
+    try lineFmt(writer, slot, "  Keep:   {d}", .{config.keep});
 
-    const flags = if (config.update and config.diff) "update diff"
+    const flags_val = if (config.update and config.diff) "update diff"
         else if (config.update) "update"
         else if (config.diff) "diff"
         else "";
-    try lineFmt(writer, &buf, "  Flags:  {s}", .{flags});
+    try lineFmt(writer, slot, "  Flags:  {s}", .{flags_val});
 
-    try writer.print("{s}├─────────────────────────────────────────┤{s}\n", .{ style.Cyan, style.Reset });
+    try hline(writer, "├", "┤", inner);
 
     for (items, 0..) |item, i| {
-        var m: [inner]u8 = undefined;
-        @memset(&m, ' ');
+        var m: [4096]u8 = undefined;
+        const ms = m[0..inner];
+        @memset(ms, ' ');
         const text = if (i == selected)
-            std.fmt.bufPrint(&m, "  > [{d}] {s}", .{ i + 1, item }) catch m[0..0]
+            std.fmt.bufPrint(ms, "  > [{d}] {s}", .{ i + 1, item }) catch ms[0..0]
         else
-            std.fmt.bufPrint(&m, "   [{d}] {s}", .{ i + 1, item }) catch m[0..0];
-        if (text.len < inner) @memset(m[text.len..inner], ' ');
-        try writer.print("{s}│{s}{s}{s}│{s}\n", .{ style.Cyan, style.Reset, &m, style.Cyan, style.Reset });
+            std.fmt.bufPrint(ms, "   [{d}] {s}", .{ i + 1, item }) catch ms[0..0];
+        if (text.len < inner) @memset(ms[text.len..inner], ' ');
+        try writer.print("{s}│{s}{s}{s}│{s}\n", .{ style.Cyan, style.Reset, ms, style.Cyan, style.Reset });
     }
 
-    try writer.print("{s}└─────────────────────────────────────────┘{s}\n", .{ style.Cyan, style.Reset });
-    try writer.print("\n{s}↑↓ jk navigate   Enter select   1-4 quick   q quit{s}\n", .{ style.Gray, style.Reset });
+    const min_content: u16 = 14;
+    if (rows > min_content) {
+        var i: u16 = rows - min_content;
+        while (i > 0) : (i -= 1) {
+            try lineFmt(writer, slot, "", .{});
+        }
+    }
+
+    try lineFmt(writer, slot, "  ↑↓ jk navigate   Enter select   1-4 quick   q quit", .{});
+    try hline(writer, "└", "┘", inner);
     try writer.flush();
 }
 
 pub fn run(io: std.Io, writer: *std.Io.Writer, reader: *std.Io.Reader, config: Config, deps: cli.Deps) !void {
     var raw_enabled = false; var saved_termios: std.posix.termios = undefined; if (std.posix.tcgetattr(std.posix.STDIN_FILENO)) |saved| { saved_termios = saved; raw_enabled = true; var raw = saved; raw.lflag.ICANON = false; raw.lflag.ECHO = false; std.posix.tcsetattr(std.posix.STDIN_FILENO, .NOW, raw) catch {}; } else |_| {}
     defer if (raw_enabled) std.posix.tcsetattr(std.posix.STDIN_FILENO, .NOW, saved_termios) catch {};
+    const ts = getTermSize();
     const items = &[_][]const u8{ "Pull & Rebuild", "Update & Rebuild", "Diff", "Quit" };
     var selected: u2 = 0;
     var cfg = config;
 
     while (true) {
-        try renderScreen(writer, cfg, items, selected);
+        try renderScreen(writer, cfg, items, selected, ts.cols, ts.rows);
 
         const key = readKey(reader);
         switch (key) {
@@ -197,7 +223,7 @@ test "renderScreen shows config" {
     var buf: [32768]u8 = undefined;
     var writer = std.Io.Writer.fixed(&buf);
     const config = Config{ .repo = "r", .hostname = "h", .keep = 5, .update = true, .diff = false };
-    try renderScreen(&writer, config, &.{ "A", "B" }, 0);
+    try renderScreen(&writer, config, &.{ "A", "B" }, 0, 80, 24);
     const out = std.mem.sliceTo(&buf, 0);
     try std.testing.expect(std.mem.indexOf(u8, out, "r") != null);
     try std.testing.expect(std.mem.indexOf(u8, out, "A") != null);

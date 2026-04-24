@@ -116,6 +116,54 @@ fn renderScreen(writer: *std.Io.Writer, config: Config, items: []const []const u
     try writer.flush();
 }
 
+fn renderWorkflowScreen(writer: *std.Io.Writer, config: Config, msg: []const u8, cols: u16, rows: u16) !void {
+    try clear(writer);
+
+    const inner: usize = @max(@as(u16, 30), cols) - 2;
+    var buf: [4096]u8 = undefined;
+    const slot = buf[0..inner];
+
+    try hline(writer, "┌", "┐", inner);
+    try lineFmt(writer, slot, "  Z I X  M A N A G E R", .{});
+    try hline(writer, "├", "┤", inner);
+
+    try lineFmt(writer, slot, "  Repo:   {s}", .{config.repo});
+    try lineFmt(writer, slot, "  Host:   {s}", .{config.hostname});
+    try lineFmt(writer, slot, "  Keep:   {d}", .{config.keep});
+
+    const flags_val = if (config.update and config.diff) "update diff"
+        else if (config.update) "update"
+        else if (config.diff) "diff"
+        else "";
+    try lineFmt(writer, slot, "  Flags:  {s}", .{flags_val});
+
+    try hline(writer, "├", "┤", inner);
+    try lineFmt(writer, slot, "{s}", .{msg});
+
+    const min_content: u16 = 10;
+    if (rows > min_content) {
+        var i: u16 = rows - min_content;
+        while (i > 0) : (i -= 1) {
+            try lineFmt(writer, slot, "", .{});
+        }
+    }
+
+    try lineFmt(writer, slot, "  Press any key to continue", .{});
+    try hline(writer, "└", "┘", inner);
+    try writer.flush();
+}
+
+fn runWorkflow(io: std.Io, writer: *std.Io.Writer, reader: *std.Io.Reader, cfg: *Config, deps: cli.Deps, action: []const u8, cols: u16, rows: u16, raw_enabled: *bool, saved_termios: *std.posix.termios) !void {
+    try renderWorkflowScreen(writer, cfg.*, action, cols, rows); if (raw_enabled.*) { std.posix.tcsetattr(std.posix.STDIN_FILENO, .NOW, saved_termios.*) catch {}; raw_enabled.* = false; }
+
+    cli.workflow(io, writer, reader, cfg.*, deps) catch |err| { if (std.posix.tcgetattr(std.posix.STDIN_FILENO)) |saved| { saved_termios.* = saved; raw_enabled.* = true; var raw = saved; raw.lflag.ICANON = false; raw.lflag.ECHO = false; std.posix.tcsetattr(std.posix.STDIN_FILENO, .NOW, raw) catch {}; } else |_| {} return err; };
+
+    if (std.posix.tcgetattr(std.posix.STDIN_FILENO)) |saved| { saved_termios.* = saved; raw_enabled.* = true; var raw = saved; raw.lflag.ICANON = false; raw.lflag.ECHO = false; std.posix.tcsetattr(std.posix.STDIN_FILENO, .NOW, raw) catch {}; } else |_| {}
+
+    try renderWorkflowScreen(writer, cfg.*, "✓ Done", cols, rows);
+    _ = readKey(reader);
+}
+
 pub fn run(io: std.Io, writer: *std.Io.Writer, reader: *std.Io.Reader, config: Config, deps: cli.Deps) !void {
     var raw_enabled = false; var saved_termios: std.posix.termios = undefined; if (std.posix.tcgetattr(std.posix.STDIN_FILENO)) |saved| { saved_termios = saved; raw_enabled = true; var raw = saved; raw.lflag.ICANON = false; raw.lflag.ECHO = false; std.posix.tcsetattr(std.posix.STDIN_FILENO, .NOW, raw) catch {}; } else |_| {}
     defer if (raw_enabled) std.posix.tcsetattr(std.posix.STDIN_FILENO, .NOW, saved_termios) catch {};
@@ -134,17 +182,17 @@ pub fn run(io: std.Io, writer: *std.Io.Writer, reader: *std.Io.Reader, config: C
             .down => if (@as(usize, selected) + 1 < items.len) { selected += 1; },
             .enter => {
                 switch (selected) {
-                    0 => { cfg.update = false; cfg.diff = false; return try cli.workflow(io, writer, reader, cfg, deps); },
-                    1 => { cfg.update = true; cfg.diff = false; return try cli.workflow(io, writer, reader, cfg, deps); },
-                    2 => { cfg.update = false; cfg.diff = true; return try cli.workflow(io, writer, reader, cfg, deps); },
+                    0 => { cfg.update = false; cfg.diff = false; try runWorkflow(io, writer, reader, &cfg, deps, "Executing Pull & Rebuild...", ts.cols, ts.rows, &raw_enabled, &saved_termios); },
+                    1 => { cfg.update = true; cfg.diff = false; try runWorkflow(io, writer, reader, &cfg, deps, "Executing Update & Rebuild...", ts.cols, ts.rows, &raw_enabled, &saved_termios); },
+                    2 => { cfg.update = false; cfg.diff = true; try runWorkflow(io, writer, reader, &cfg, deps, "Executing Diff...", ts.cols, ts.rows, &raw_enabled, &saved_termios); },
                     3 => return,
                 }
             },
             .char => |c| {
                 switch (c) {
-                    '1' => { cfg.update = false; cfg.diff = false; return try cli.workflow(io, writer, reader, cfg, deps); },
-                    '2' => { cfg.update = true; cfg.diff = false; return try cli.workflow(io, writer, reader, cfg, deps); },
-                    '3' => { cfg.update = false; cfg.diff = true; return try cli.workflow(io, writer, reader, cfg, deps); },
+                    '1' => { cfg.update = false; cfg.diff = false; try runWorkflow(io, writer, reader, &cfg, deps, "Executing Pull & Rebuild...", ts.cols, ts.rows, &raw_enabled, &saved_termios); },
+                    '2' => { cfg.update = true; cfg.diff = false; try runWorkflow(io, writer, reader, &cfg, deps, "Executing Update & Rebuild...", ts.cols, ts.rows, &raw_enabled, &saved_termios); },
+                    '3' => { cfg.update = false; cfg.diff = true; try runWorkflow(io, writer, reader, &cfg, deps, "Executing Diff...", ts.cols, ts.rows, &raw_enabled, &saved_termios); },
                     '4', 'q' => return,
                     'j' => if (@as(usize, selected) + 1 < items.len) { selected += 1; },
                     'k' => if (selected > 0) { selected -= 1; },

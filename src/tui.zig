@@ -7,8 +7,7 @@ const allocator = @import("utils/allocator.zig").allocator;
 
 var tui_cap: ?*std.ArrayList(u8) = null;
 
-fn tuiTitleMaker(writer: *std.Io.Writer, text: []const u8) !void {
-    _ = writer;
+fn tuiTitleMaker(_: *std.Io.Writer, text: []const u8) !void {
     if (tui_cap) |cap| {
         try cap.appendSlice(allocator, "\n *** ");
         try cap.appendSlice(allocator, text);
@@ -61,7 +60,6 @@ fn getTermSize() struct { cols: u16, rows: u16 } {
 
 fn clear(writer: *std.Io.Writer) !void {
     try writer.print("\x1b[2J\x1b[H", .{});
-    try writer.flush();
 }
 
 fn lineFmt(writer: *std.Io.Writer, buf: []u8, comptime fmt: []const u8, args: anytype) !void {
@@ -192,7 +190,7 @@ fn renderCaptureScreen(writer: *std.Io.Writer, config: Config, lines: []const u8
     var line_count: usize = 0;
     while (count_iter.next()) |_| { line_count += 1; }
 
-    const max_lines = @as(usize, @max(@as(i32, 0), @as(i32, rows) - 10));
+    const max_lines = rows - 4;
     const skip = if (line_count > max_lines) line_count - max_lines else 0;
 
     var show_iter = std.mem.splitSequence(u8, lines, "\n");
@@ -225,8 +223,6 @@ fn renderCaptureScreen(writer: *std.Io.Writer, config: Config, lines: []const u8
 
 fn runWorkflow(io: std.Io, writer: *std.Io.Writer, reader: *std.Io.Reader, cfg: *Config, deps: cli.Deps, action: []const u8, cols: u16, rows: u16, raw_enabled: *bool, saved_termios: *std.posix.termios, capture_list: ?*std.ArrayList(u8)) !void {
     try renderWorkflowScreen(writer, cfg.*, action, cols, rows); if (raw_enabled.*) { std.posix.tcsetattr(std.posix.STDIN_FILENO, .NOW, saved_termios.*) catch {}; raw_enabled.* = false; }
-
-    try clear(writer);
     try writer.flush();
 
     cli.workflow(io, writer, reader, cfg.*, deps) catch |err| { if (std.posix.tcgetattr(std.posix.STDIN_FILENO)) |saved| { saved_termios.* = saved; raw_enabled.* = true; var raw = saved; raw.lflag.ICANON = false; raw.lflag.ECHO = false; std.posix.tcsetattr(std.posix.STDIN_FILENO, .NOW, raw) catch {}; } else |_| {} return err; };

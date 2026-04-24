@@ -5,6 +5,17 @@ const cli = @import("app/cli.zig");
 const style = @import("utils/style.zig");
 const allocator = @import("utils/allocator.zig").allocator;
 
+var tui_cap: ?*std.ArrayList(u8) = null;
+
+fn tuiTitleMaker(writer: *std.Io.Writer, text: []const u8) !void {
+    _ = writer;
+    if (tui_cap) |cap| {
+        try cap.appendSlice(allocator, "\n *** ");
+        try cap.appendSlice(allocator, text);
+        try cap.appendSlice(allocator, " ***\n");
+    }
+}
+
 pub const Key = union(enum) {
     char: u8,
     up,
@@ -215,6 +226,9 @@ fn renderCaptureScreen(writer: *std.Io.Writer, config: Config, lines: []const u8
 fn runWorkflow(io: std.Io, writer: *std.Io.Writer, reader: *std.Io.Reader, cfg: *Config, deps: cli.Deps, action: []const u8, cols: u16, rows: u16, raw_enabled: *bool, saved_termios: *std.posix.termios, capture_list: ?*std.ArrayList(u8)) !void {
     try renderWorkflowScreen(writer, cfg.*, action, cols, rows); if (raw_enabled.*) { std.posix.tcsetattr(std.posix.STDIN_FILENO, .NOW, saved_termios.*) catch {}; raw_enabled.* = false; }
 
+    try clear(writer);
+    try writer.flush();
+
     cli.workflow(io, writer, reader, cfg.*, deps) catch |err| { if (std.posix.tcgetattr(std.posix.STDIN_FILENO)) |saved| { saved_termios.* = saved; raw_enabled.* = true; var raw = saved; raw.lflag.ICANON = false; raw.lflag.ECHO = false; std.posix.tcsetattr(std.posix.STDIN_FILENO, .NOW, raw) catch {}; } else |_| {} return err; };
 
     if (std.posix.tcgetattr(std.posix.STDIN_FILENO)) |saved| { saved_termios.* = saved; raw_enabled.* = true; var raw = saved; raw.lflag.ICANON = false; raw.lflag.ECHO = false; std.posix.tcsetattr(std.posix.STDIN_FILENO, .NOW, raw) catch {}; } else |_| {}
@@ -237,7 +251,7 @@ pub fn run(io: std.Io, writer: *std.Io.Writer, reader: *std.Io.Reader, config: C
     var capture_buf: std.ArrayList(u8) = .empty;
     defer capture_buf.deinit(allocator);
     var workflow_deps = deps;
-    if (!builtin.is_test) { workflow_deps.capture_target = &capture_buf; }
+    if (!builtin.is_test) { workflow_deps.capture_target = &capture_buf; workflow_deps.titleMaker = tuiTitleMaker; tui_cap = &capture_buf; }
 
     while (true) {
         try renderScreen(writer, cfg, items, selected, ts.cols, ts.rows);

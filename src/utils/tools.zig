@@ -23,12 +23,36 @@ pub fn titleMakerAlloc(writer: *std.Io.Writer, text: []const u8, alloc: std.mem.
 
 pub fn run(io: std.Io, command: []const u8, opts: @import("../app/cli.zig").RunOpts) !i32 {
     const shellCommand = [_][]const u8{ "sh", "-c", command };
+    const use_pipe = opts.capture != null;
     var child = try std.process.spawn(io, .{
         .argv = &shellCommand,
         .stdin = .inherit,
-        .stdout = if (opts.output) .inherit else .ignore,
-        .stderr = if (opts.output) .inherit else .ignore,
+        .stdout = if (use_pipe) .pipe else if (opts.output) .inherit else .ignore,
+        .stderr = if (use_pipe) .pipe else if (opts.output) .inherit else .ignore,
     });
+
+    if (opts.capture) |cap| {
+        if (child.stdout) |out_file| {
+            var pipe_read_buf: [4096]u8 = undefined;
+            while (true) {
+                const n = std.posix.read(out_file.handle, &pipe_read_buf) catch |err| switch (err) {
+                    error.WouldBlock => continue,
+                    else => |e| return e,
+                };
+                if (n == 0) break;
+                cap.appendSlice(allocator, pipe_read_buf[0..n]) catch |e| return e;
+            }
+        }
+        if (child.stderr) |err_file| {
+            var pipe_read_buf: [4096]u8 = undefined;
+            while (true) {
+                const n = std.posix.read(err_file.handle, &pipe_read_buf) catch |err| switch (err) { error.WouldBlock => continue, else => |e| return e, };
+                if (n == 0) break;
+                cap.appendSlice(allocator, pipe_read_buf[0..n]) catch |e| return e;
+            }
+        }
+    }
+
     const term = try child.wait(io);
     switch (term) {
         .exited => |code| return code,
@@ -96,6 +120,16 @@ test "run basic commands" {
     try std.testing.expectEqual(@as(i32, 1), try run(io, "false", .{}));
     try std.testing.expectEqual(@as(i32, 1), try run(io, "kill -9 $$", .{}));
     try std.testing.expectEqual(@as(i32, 0), try run(io, "", .{ .output = false }));
+}
+
+test "run captures output" {
+    const io = std.testing.io;
+    var cap: std.ArrayList(u8) = .empty;
+    defer cap.deinit(allocator);
+    const status = try run(io, "echo hello; echo world >&2", .{ .capture = &cap });
+    try std.testing.expectEqual(@as(i32, 0), status);
+    try std.testing.expect(std.mem.indexOf(u8, cap.items, "hello") != null);
+    try std.testing.expect(std.mem.indexOf(u8, cap.items, "world") != null);
 }
 
 test "confirm responses" {

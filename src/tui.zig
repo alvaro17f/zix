@@ -1,7 +1,9 @@
 const std = @import("std");
+const builtin = @import("builtin");
 const Config = @import("app/config.zig").Config;
 const cli = @import("app/cli.zig");
 const style = @import("utils/style.zig");
+const allocator = @import("utils/allocator.zig").allocator;
 
 pub const Key = union(enum) {
     char: u8,
@@ -153,14 +155,75 @@ fn renderWorkflowScreen(writer: *std.Io.Writer, config: Config, msg: []const u8,
     try writer.flush();
 }
 
-fn runWorkflow(io: std.Io, writer: *std.Io.Writer, reader: *std.Io.Reader, cfg: *Config, deps: cli.Deps, action: []const u8, cols: u16, rows: u16, raw_enabled: *bool, saved_termios: *std.posix.termios) !void {
+fn renderCaptureScreen(writer: *std.Io.Writer, config: Config, lines: []const u8, cols: u16, rows: u16) !void {
+    try clear(writer);
+    const inner: usize = @max(@as(u16, 30), cols) - 2;
+    var buf: [4096]u8 = undefined;
+    const slot = buf[0..inner];
+
+    try hline(writer, "┌", "┐", inner);
+    try lineFmt(writer, slot, "  Z I X  M A N A G E R", .{});
+    try hline(writer, "├", "┤", inner);
+
+    try lineFmt(writer, slot, "  Repo:   {s}", .{config.repo});
+    try lineFmt(writer, slot, "  Host:   {s}", .{config.hostname});
+    try lineFmt(writer, slot, "  Keep:   {d}", .{config.keep});
+
+    const flags_val = if (config.update and config.diff) "update diff"
+        else if (config.update) "update"
+        else if (config.diff) "diff"
+        else "";
+    try lineFmt(writer, slot, "  Flags:  {s}", .{flags_val});
+
+    try hline(writer, "├", "┤", inner);
+
+    var count_iter = std.mem.splitSequence(u8, lines, "\n");
+    var line_count: usize = 0;
+    while (count_iter.next()) |_| { line_count += 1; }
+
+    const max_lines = @as(usize, @max(@as(i32, 0), @as(i32, rows) - 10));
+    const skip = if (line_count > max_lines) line_count - max_lines else 0;
+
+    var show_iter = std.mem.splitSequence(u8, lines, "\n");
+    var i: usize = 0;
+    var shown: usize = 0;
+    while (show_iter.next()) |line| {
+        if (i >= skip and shown < max_lines) {
+            var m: [4096]u8 = undefined;
+            const ms = m[0..inner];
+            @memset(ms, ' ');
+            const max_width = if (inner >= 4) inner - 4 else 0;
+            const display = if (line.len > max_width) line[0..max_width] else line;
+            const printed = std.fmt.bufPrint(ms[2..], "{s}", .{display}) catch ms[2..];
+            _ = printed;
+            try writer.print("{s}│{s}{s}{s}│{s}\n", .{ style.Cyan, style.Reset, ms, style.Cyan, style.Reset });
+            shown += 1;
+        }
+        i += 1;
+    }
+
+    while (shown < max_lines) {
+        try lineFmt(writer, slot, "", .{});
+        shown += 1;
+    }
+
+    try lineFmt(writer, slot, "  Press any key to continue", .{});
+    try hline(writer, "└", "┘", inner);
+    try writer.flush();
+}
+
+fn runWorkflow(io: std.Io, writer: *std.Io.Writer, reader: *std.Io.Reader, cfg: *Config, deps: cli.Deps, action: []const u8, cols: u16, rows: u16, raw_enabled: *bool, saved_termios: *std.posix.termios, capture_list: ?*std.ArrayList(u8)) !void {
     try renderWorkflowScreen(writer, cfg.*, action, cols, rows); if (raw_enabled.*) { std.posix.tcsetattr(std.posix.STDIN_FILENO, .NOW, saved_termios.*) catch {}; raw_enabled.* = false; }
 
     cli.workflow(io, writer, reader, cfg.*, deps) catch |err| { if (std.posix.tcgetattr(std.posix.STDIN_FILENO)) |saved| { saved_termios.* = saved; raw_enabled.* = true; var raw = saved; raw.lflag.ICANON = false; raw.lflag.ECHO = false; std.posix.tcsetattr(std.posix.STDIN_FILENO, .NOW, raw) catch {}; } else |_| {} return err; };
 
     if (std.posix.tcgetattr(std.posix.STDIN_FILENO)) |saved| { saved_termios.* = saved; raw_enabled.* = true; var raw = saved; raw.lflag.ICANON = false; raw.lflag.ECHO = false; std.posix.tcsetattr(std.posix.STDIN_FILENO, .NOW, raw) catch {}; } else |_| {}
 
-    try renderWorkflowScreen(writer, cfg.*, "✓ Done", cols, rows);
+    if (capture_list) |cap| {
+        try renderCaptureScreen(writer, cfg.*, cap.items, cols, rows);
+    } else {
+        try renderWorkflowScreen(writer, cfg.*, "✓ Done", cols, rows);
+    }
     _ = readKey(reader);
 }
 
@@ -171,6 +234,10 @@ pub fn run(io: std.Io, writer: *std.Io.Writer, reader: *std.Io.Reader, config: C
     const items = &[_][]const u8{ "Pull & Rebuild", "Update & Rebuild", "Diff", "Quit" };
     var selected: u2 = 0;
     var cfg = config;
+    var capture_buf: std.ArrayList(u8) = .empty;
+    defer capture_buf.deinit(allocator);
+    var workflow_deps = deps;
+    if (!builtin.is_test) { workflow_deps.capture_target = &capture_buf; }
 
     while (true) {
         try renderScreen(writer, cfg, items, selected, ts.cols, ts.rows);
@@ -182,17 +249,17 @@ pub fn run(io: std.Io, writer: *std.Io.Writer, reader: *std.Io.Reader, config: C
             .down => if (@as(usize, selected) + 1 < items.len) { selected += 1; },
             .enter => {
                 switch (selected) {
-                    0 => { cfg.update = false; cfg.diff = false; try runWorkflow(io, writer, reader, &cfg, deps, "Executing Pull & Rebuild...", ts.cols, ts.rows, &raw_enabled, &saved_termios); },
-                    1 => { cfg.update = true; cfg.diff = false; try runWorkflow(io, writer, reader, &cfg, deps, "Executing Update & Rebuild...", ts.cols, ts.rows, &raw_enabled, &saved_termios); },
-                    2 => { cfg.update = false; cfg.diff = true; try runWorkflow(io, writer, reader, &cfg, deps, "Executing Diff...", ts.cols, ts.rows, &raw_enabled, &saved_termios); },
+                    0 => { cfg.update = false; cfg.diff = false; try runWorkflow(io, writer, reader, &cfg, workflow_deps, "Executing Pull & Rebuild...", ts.cols, ts.rows, &raw_enabled, &saved_termios, if (builtin.is_test) null else &capture_buf); },
+                    1 => { cfg.update = true; cfg.diff = false; try runWorkflow(io, writer, reader, &cfg, workflow_deps, "Executing Update & Rebuild...", ts.cols, ts.rows, &raw_enabled, &saved_termios, if (builtin.is_test) null else &capture_buf); },
+                    2 => { cfg.update = false; cfg.diff = true; try runWorkflow(io, writer, reader, &cfg, workflow_deps, "Executing Diff...", ts.cols, ts.rows, &raw_enabled, &saved_termios, if (builtin.is_test) null else &capture_buf); },
                     3 => return,
                 }
             },
             .char => |c| {
                 switch (c) {
-                    '1' => { cfg.update = false; cfg.diff = false; try runWorkflow(io, writer, reader, &cfg, deps, "Executing Pull & Rebuild...", ts.cols, ts.rows, &raw_enabled, &saved_termios); },
-                    '2' => { cfg.update = true; cfg.diff = false; try runWorkflow(io, writer, reader, &cfg, deps, "Executing Update & Rebuild...", ts.cols, ts.rows, &raw_enabled, &saved_termios); },
-                    '3' => { cfg.update = false; cfg.diff = true; try runWorkflow(io, writer, reader, &cfg, deps, "Executing Diff...", ts.cols, ts.rows, &raw_enabled, &saved_termios); },
+                    '1' => { cfg.update = false; cfg.diff = false; try runWorkflow(io, writer, reader, &cfg, workflow_deps, "Executing Pull & Rebuild...", ts.cols, ts.rows, &raw_enabled, &saved_termios, if (builtin.is_test) null else &capture_buf); },
+                    '2' => { cfg.update = true; cfg.diff = false; try runWorkflow(io, writer, reader, &cfg, workflow_deps, "Executing Update & Rebuild...", ts.cols, ts.rows, &raw_enabled, &saved_termios, if (builtin.is_test) null else &capture_buf); },
+                    '3' => { cfg.update = false; cfg.diff = true; try runWorkflow(io, writer, reader, &cfg, workflow_deps, "Executing Diff...", ts.cols, ts.rows, &raw_enabled, &saved_termios, if (builtin.is_test) null else &capture_buf); },
                     '4', 'q' => return,
                     'j' => if (@as(usize, selected) + 1 < items.len) { selected += 1; },
                     'k' => if (selected > 0) { selected -= 1; },
@@ -276,6 +343,29 @@ test "renderScreen shows config" {
     try std.testing.expect(std.mem.indexOf(u8, out, "r") != null);
     try std.testing.expect(std.mem.indexOf(u8, out, "A") != null);
     try std.testing.expect(std.mem.indexOf(u8, out, ">") != null);
+}
+
+test "renderCaptureScreen shows lines" {
+    var buf: [32768]u8 = undefined;
+    var writer = std.Io.Writer.fixed(&buf);
+    const config = Config{ .repo = "r", .hostname = "h", .keep = 5, .update = false, .diff = false };
+    try renderCaptureScreen(&writer, config, "line one\nline two\nline three", 80, 24);
+    const out = std.mem.sliceTo(&buf, 0);
+    try std.testing.expect(std.mem.indexOf(u8, out, "line two") != null);
+    try std.testing.expect(std.mem.indexOf(u8, out, "Press any key") != null);
+}
+
+test "runWorkflow with capture" {
+    var wbuf: [32768]u8 = undefined;
+    var writer = std.Io.Writer.fixed(&wbuf);
+    var capture_buf: std.ArrayList(u8) = .empty;
+    defer capture_buf.deinit(allocator);
+    try capture_buf.appendSlice(allocator, "hello\nworld");
+    var reader = std.Io.Reader.fixed("");
+    var cfg = Config{ .repo = "r", .hostname = "h", .keep = 1, .update = false, .diff = false };
+    var raw_enabled = false;
+    var saved_termios: std.posix.termios = undefined;
+    try runWorkflow(std.testing.io, &writer, &reader, &cfg, mock_deps, "Test", 80, 24, &raw_enabled, &saved_termios, &capture_buf);
 }
 
 test "tui run quits on q" {

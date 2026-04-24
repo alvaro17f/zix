@@ -5,22 +5,24 @@ const cmd = @import("../utils/commands.zig");
 const Config = @import("config.zig").Config;
 const style = @import("../utils/style.zig");
 
-pub const RunOpts = struct { output: bool = true };
+pub const RunOpts = struct { output: bool = true, capture: ?*std.ArrayList(u8) = null };
 
 pub const Deps = struct {
     run: *const fn (std.Io, []const u8, RunOpts) anyerror!i32,
     confirm: *const fn (*std.Io.Reader, *std.Io.Writer, bool, ?[]const u8) anyerror!bool,
     titleMaker: *const fn (*std.Io.Writer, []const u8) anyerror!void,
     configPrint: *const fn (*std.Io.Writer, Config) anyerror!void,
+    capture_target: ?*std.ArrayList(u8) = null,
 };
 
 pub fn workflow(io: std.Io, writer: *std.Io.Writer, reader: *std.Io.Reader, config: Config, deps: Deps) !void {
     var arena = Arena.init();
     defer arena.deinit();
     const allocator = arena.allocator();
+    const run_opts = RunOpts{ .capture = deps.capture_target };
 
     try deps.titleMaker(writer, "Git Pull");
-    const git_pull_status = try deps.run(io, try cmd.gitPull(allocator, config.repo), .{});
+    const git_pull_status = try deps.run(io, try cmd.gitPull(allocator, config.repo), run_opts);
 
     if (git_pull_status != 0) {
         try fmt.printTo(writer, "{s}Failed to pull changes{s}\n", .{ style.Red, style.Reset });
@@ -29,26 +31,26 @@ pub fn workflow(io: std.Io, writer: *std.Io.Writer, reader: *std.Io.Reader, conf
 
     if (config.update) {
         try deps.titleMaker(writer, "Nix Update");
-        _ = try deps.run(io, try cmd.nixUpdate(allocator, config.repo), .{});
+        _ = try deps.run(io, try cmd.nixUpdate(allocator, config.repo), run_opts);
     }
 
-    if (try deps.run(io, try cmd.gitDiff(allocator, config.repo), .{ .output = false }) == 1) {
+    if (try deps.run(io, try cmd.gitDiff(allocator, config.repo), RunOpts{ .output = false, .capture = deps.capture_target }) == 1) {
         try deps.titleMaker(writer, "Git Changes");
-        _ = try deps.run(io, try cmd.gitStatus(allocator, config.repo), .{});
+        _ = try deps.run(io, try cmd.gitStatus(allocator, config.repo), run_opts);
 
         if (try deps.confirm(reader, writer, true, "Do you want to add these changes to the stage?")) {
-            _ = deps.run(io, try cmd.gitAdd(allocator, config.repo), .{}) catch |err| { try fmt.printTo(writer, "Failed to add changes to the stage: {}\n", .{err}); };
+            _ = deps.run(io, try cmd.gitAdd(allocator, config.repo), run_opts) catch |err| { try fmt.printTo(writer, "Failed to add changes to the stage: {}\n", .{err}); };
             try fmt.printTo(writer, "{s}Changes added to git stage successfully{s}\n", .{ style.Green, style.Reset });
         }
     }
 
     try deps.titleMaker(writer, "Nixos Rebuild");
-    _ = try deps.run(io, try cmd.nixRebuild(allocator, config.repo, config.hostname), .{});
-    _ = try deps.run(io, try cmd.nixKeep(allocator, config.keep), .{});
+    _ = try deps.run(io, try cmd.nixRebuild(allocator, config.repo, config.hostname), run_opts);
+    _ = try deps.run(io, try cmd.nixKeep(allocator, config.keep), run_opts);
 
     if (config.diff) {
         try deps.titleMaker(writer, "Nix Diff");
-        _ = try deps.run(io, cmd.nixDiff, .{});
+        _ = try deps.run(io, cmd.nixDiff, run_opts);
     }
 }
 

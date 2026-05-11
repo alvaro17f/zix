@@ -13,11 +13,10 @@ pub const Config = struct {
     update: bool,
     diff: bool,
 
-    pub fn defaults() Config {
-        var buf: [std.posix.HOST_NAME_MAX]u8 = undefined;
+    pub fn defaults(hostname_buf: *[std.posix.HOST_NAME_MAX]u8) Config {
         return .{
             .repo = "~/.dotfiles",
-            .hostname = std.posix.gethostname(&buf) catch "unknown",
+            .hostname = std.posix.gethostname(hostname_buf) catch "unknown",
             .keep = 10,
             .update = false,
             .diff = false,
@@ -71,7 +70,8 @@ pub fn configPrint(writer: *std.Io.Writer, config: Config) !void {
 }
 
 pub fn run(cli_io: std.Io, writer: *std.Io.Writer, args: []const []const u8, deps: cli_module.Deps, alloc: std.mem.Allocator) !void {
-    var config = Config.defaults();
+    var hostname_buf: [std.posix.HOST_NAME_MAX]u8 = undefined;
+    var config = Config.defaults(&hostname_buf);
 
     if (args.len <= 1) {
         return try cli(cli_io, writer, config, deps, alloc);

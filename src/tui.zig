@@ -211,11 +211,6 @@ fn renderCaptureScreen(writer: *std.Io.Writer, config: Config, lines: []const u8
         i += 1;
     }
 
-    while (shown < max_lines) {
-        try lineFmt(writer, slot, "", .{});
-        shown += 1;
-    }
-
     try lineFmt(writer, slot, "  Press any key to continue", .{});
     try hline(writer, "└", "┘", inner);
     try writer.flush();
@@ -230,7 +225,11 @@ fn runWorkflow(io: std.Io, writer: *std.Io.Writer, reader: *std.Io.Reader, cfg: 
     if (std.posix.tcgetattr(std.posix.STDIN_FILENO)) |saved| { saved_termios.* = saved; raw_enabled.* = true; var raw = saved; raw.lflag.ICANON = false; raw.lflag.ECHO = false; std.posix.tcsetattr(std.posix.STDIN_FILENO, .NOW, raw) catch {}; } else |_| {}
 
     if (capture_list) |cap| {
-        try renderCaptureScreen(writer, cfg.*, cap.items, cols, rows);
+        if (cap.items.len > 0) {
+            try renderCaptureScreen(writer, cfg.*, cap.items, cols, rows);
+        } else {
+            try renderWorkflowScreen(writer, cfg.*, "✓ Done", cols, rows);
+        }
     } else {
         try renderWorkflowScreen(writer, cfg.*, "✓ Done", cols, rows);
     }

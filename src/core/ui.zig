@@ -15,7 +15,20 @@ pub fn printTitle(writer: *std.Io.Writer, text: []const u8, alloc: std.mem.Alloc
 }
 
 pub fn confirm(writer: *std.Io.Writer, default_value: bool, msg: ?[]const u8, alloc: std.mem.Allocator) !bool {
-    return confirmStdin(writer, default_value, msg, alloc);
+    try writeConfirmPrompt(writer, default_value, msg);
+
+    var buf: [256]u8 = undefined;
+    var i: usize = 0;
+    while (i < buf.len - 1) {
+        const n = std.posix.read(0, buf[i..i+1]) catch |err| {
+            if (err == error.WouldBlock) continue;
+            return err;
+        };
+        if (n == 0) return false;
+        if (buf[i] == '\n') return parseConfirmResponse(buf[0..i], default_value, alloc);
+        i += 1;
+    }
+    return false;
 }
 
 fn writeConfirmPrompt(writer: *std.Io.Writer, default_value: bool, msg: ?[]const u8) !void {
@@ -34,23 +47,6 @@ fn parseConfirmResponse(line: []const u8, default_value: bool, alloc: std.mem.Al
     if (eql(u8, response, "y") or eql(u8, response, "yes")) return true;
     if (eql(u8, response, "n") or eql(u8, response, "no")) return false;
     if (eql(u8, response, "") or line.len == 0) return default_value;
-    return false;
-}
-
-fn confirmStdin(writer: *std.Io.Writer, default_value: bool, msg: ?[]const u8, alloc: std.mem.Allocator) !bool {
-    try writeConfirmPrompt(writer, default_value, msg);
-
-    var buf: [256]u8 = undefined;
-    var i: usize = 0;
-    while (i < buf.len - 1) {
-        const n = std.posix.read(0, buf[i..i+1]) catch |err| {
-            if (err == error.WouldBlock) continue;
-            return err;
-        };
-        if (n == 0) return false;
-        if (buf[i] == '\n') return parseConfirmResponse(buf[0..i], default_value, alloc);
-        i += 1;
-    }
     return false;
 }
 

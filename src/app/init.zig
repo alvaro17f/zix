@@ -1,9 +1,9 @@
 const std = @import("std");
-const fmt = @import("../utils/fmt.zig");
+const io = @import("../core/io.zig");
 const cli_module = @import("./cli.zig");
 const cli = cli_module.cli;
 const eql = std.mem.eql;
-const style = @import("../utils/style.zig");
+const process = @import("../core/process.zig");
 const VERSION = @import("zon").version;
 
 pub const Config = struct {
@@ -26,7 +26,7 @@ pub const Config = struct {
 };
 
 pub fn printHelp(writer: *std.Io.Writer) !void {
-    try fmt.printTo(writer,
+    try io.printTo(writer,
         \\
         \\ *****************************************************
         \\  ZIX - A simple CLI tool to update your nixos system
@@ -44,18 +44,18 @@ pub fn printHelp(writer: *std.Io.Writer) !void {
 }
 
 pub fn printVersion(writer: *std.Io.Writer) !void {
-    try fmt.printTo(writer, "{s}\nZIX version: {s}{s}\n{s}", .{ style.Yellow, style.Cyan, VERSION, style.Reset });
+    try io.printTo(writer, "{s}\nZIX version: {s}{s}\n{s}", .{ io.Yellow, io.Cyan, VERSION, io.Reset });
 }
 
 pub fn getHostname(buffer: *[64]u8) []const u8 {
     return std.posix.gethostname(buffer) catch "unknown";
 }
 
-pub fn run(io: std.Io, writer: *std.Io.Writer, reader: *std.Io.Reader, args: []const []const u8, deps: cli_module.Deps, alloc: std.mem.Allocator) !void {
+pub fn run(cli_io: std.Io, writer: *std.Io.Writer, reader: *std.Io.Reader, args: []const []const u8, deps: cli_module.Deps, alloc: std.mem.Allocator) !void {
     var config = Config.defaults();
 
     if (args.len <= 1) {
-        return try cli(io, writer, reader, config, deps, alloc);
+        return try cli(cli_io, writer, reader, config, deps, alloc);
     }
 
     for (args[1..], 0..) |arg, idx| {
@@ -72,19 +72,19 @@ pub fn run(io: std.Io, writer: *std.Io.Writer, reader: *std.Io.Reader, args: []c
                     'u' => config.update = true,
                     'r', 'n', 'k' => {
                         if (idx + 2 >= args.len) {
-                            return try fmt.printTo(writer, "{s}Error: \"-{c}\" flag requires an argument\n{s}", .{ style.Red, flag, style.Reset });
+                            return try io.printTo(writer, "{s}Error: \"-{c}\" flag requires an argument\n{s}", .{ io.Red, flag, io.Reset });
                         }
                         if (flag == 'r') config.repo = args[idx + 2];
                         if (flag == 'n') config.hostname = args[idx + 2];
                         if (flag == 'k') {
                             const argument = args[idx + 2];
                             const number = std.fmt.parseInt(u8, argument, 10) catch {
-                                return try fmt.printTo(writer, "{s}Error: Value of \"-k\" flag is not numeric.\n{s}", .{ style.Red, style.Reset });
+                                return try io.printTo(writer, "{s}Error: Value of \"-k\" flag is not numeric.\n{s}", .{ io.Red, io.Reset });
                             };
                             config.keep = number;
                         }
                     },
-                    else => return try fmt.printTo(writer, "{s}Error: Unknown flag \"-{c}\"\n{s}", .{ style.Red, flag, style.Reset }),
+                    else => return try io.printTo(writer, "{s}Error: Unknown flag \"-{c}\"\n{s}", .{ io.Red, flag, io.Reset }),
                 }
             }
         } else if (idx == 0) {
@@ -95,15 +95,15 @@ pub fn run(io: std.Io, writer: *std.Io.Writer, reader: *std.Io.Reader, args: []c
                 if (eql(u8, argument, "version")) {
                     return try printVersion(writer);
                 }
-                return try fmt.printTo(writer, "{s}Error: Unknown argument \"{s}\"\n{s}", .{ style.Red, argument, style.Reset });
+                return try io.printTo(writer, "{s}Error: Unknown argument \"{s}\"\n{s}", .{ io.Red, argument, io.Reset });
             }
         }
     }
 
-    return try cli(io, writer, reader, config, deps, alloc);
+    return try cli(cli_io, writer, reader, config, deps, alloc);
 }
 
-fn mockRun(_: std.Io, _: []const u8, _: @import("../utils/tools.zig").RunOpts) anyerror!i32 { return 0; }
+fn mockRun(_: std.Io, _: []const u8, _: process.RunOpts) anyerror!i32 { return 0; }
 noinline fn mockConfirm(_: *std.Io.Reader, _: *std.Io.Writer, _: bool, _: ?[]const u8, _: std.mem.Allocator) anyerror!bool { return true; }
 noinline fn mockPrintTitle(_: *std.Io.Writer, _: []const u8, _: std.mem.Allocator) anyerror!void {}
 noinline fn mockConfigPrint(_: *std.Io.Writer, _: Config) anyerror!void {}
@@ -131,7 +131,7 @@ test "getHostname non-empty" {
 }
 
 test "run flag branches" {
-    const io = std.testing.io;
+    const test_io = std.testing.io;
     const TestCase = struct {
         args: []const []const u8,
         expect_contains: ?[]const u8 = null,
@@ -161,7 +161,7 @@ test "run flag branches" {
     for (cases) |tc| {
         var buf: [2048]u8 = undefined;
         var writer = std.Io.Writer.fixed(&buf);
-        run(io, &writer, std.Io.Reader.ending, tc.args, mock_deps, std.testing.allocator) catch continue;
+        run(test_io, &writer, std.Io.Reader.ending, tc.args, mock_deps, std.testing.allocator) catch continue;
         if (tc.expect_contains) |needle| {
             const out = std.mem.sliceTo(&buf, 0);
             try std.testing.expect(std.mem.indexOf(u8, out, needle) != null);
@@ -170,7 +170,7 @@ test "run flag branches" {
 }
 
 test "run reaches cli" {
-    const io = std.testing.io;
+    const test_io = std.testing.io;
     var buf: [256]u8 = undefined;
     var writer = std.Io.Writer.fixed(&buf);
 
@@ -181,5 +181,5 @@ test "run reaches cli" {
         .configPrint = mockConfigPrint,
     };
 
-    try run(io, &writer, std.Io.Reader.ending, &.{"zix"}, mock_deps, std.testing.allocator);
+    try run(test_io, &writer, std.Io.Reader.ending, &.{"zix"}, mock_deps, std.testing.allocator);
 }

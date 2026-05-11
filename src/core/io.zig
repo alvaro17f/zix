@@ -1,3 +1,14 @@
+const std = @import("std");
+
+// --- Formatting ---
+
+pub fn printTo(writer: *std.Io.Writer, comptime format: []const u8, args: anytype) !void {
+    try writer.print(format, args);
+    try writer.flush();
+}
+
+// --- ANSI Styles ---
+
 pub const Red = "\x1b[31m";
 pub const Green = "\x1b[32m";
 pub const Yellow = "\x1b[33m";
@@ -10,8 +21,14 @@ pub const Reset = "\x1b[0m";
 pub const Bold = "\x1b[1m";
 pub const Underline = "\x1b[4m";
 
+test "printTo writes exact bytes" {
+    var buf: [256]u8 = undefined;
+    var writer = std.Io.Writer.fixed(&buf);
+    try printTo(&writer, "hello {d} {s}", .{ 42, "world" });
+    try std.testing.expectEqualStrings("hello 42 world", buf[0..14]);
+}
+
 test "style constants are non-empty" {
-    const std = @import("std");
     const fields = @typeInfo(@This()).@"struct".fields;
     inline for (fields) |field| {
         const val = @field(@This(), field.name);

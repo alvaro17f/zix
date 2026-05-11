@@ -1,9 +1,6 @@
 const std = @import("std");
-const fmt = @import("fmt.zig");
+const io = @import("io.zig");
 const eql = std.mem.eql;
-const style = @import("style.zig");
-
-pub const RunOpts = struct { output: bool = true };
 
 pub fn printTitle(writer: *std.Io.Writer, text: []const u8, alloc: std.mem.Allocator) !void {
     const border = alloc.alloc(u8, text.len + 4) catch |err| {
@@ -14,22 +11,7 @@ pub fn printTitle(writer: *std.Io.Writer, text: []const u8, alloc: std.mem.Alloc
     for (border) |*c| {
         c.* = '*';
     }
-    try fmt.printTo(writer, "{s}\n{s}\n* {s}{s}{s} *\n{s}\n{s}", .{ style.Blue, border, style.Red, text, style.Blue, border, style.Reset });
-}
-
-pub fn run(io: std.Io, command: []const u8, opts: RunOpts) !i32 {
-    const shellCommand = [_][]const u8{ "sh", "-c", command };
-    var child = try std.process.spawn(io, .{
-        .argv = &shellCommand,
-        .stdin = .inherit,
-        .stdout = if (opts.output) .inherit else .ignore,
-        .stderr = if (opts.output) .inherit else .ignore,
-    });
-    const term = try child.wait(io);
-    switch (term) {
-        .exited => |code| return code,
-        else => return 1,
-    }
+    try io.printTo(writer, "{s}\n{s}\n* {s}{s}{s} *\n{s}\n{s}", .{ io.Blue, border, io.Red, text, io.Blue, border, io.Reset });
 }
 
 pub fn confirm(reader: *std.Io.Reader, writer: *std.Io.Writer, default_value: bool, msg: ?[]const u8, alloc: std.mem.Allocator) !bool {
@@ -38,11 +20,11 @@ pub fn confirm(reader: *std.Io.Reader, writer: *std.Io.Writer, default_value: bo
 }
 
 fn writeConfirmPrompt(writer: *std.Io.Writer, default_value: bool, msg: ?[]const u8) !void {
-    const hint = if (default_value) std.fmt.comptimePrint("{s}(Y/n){s}", .{ style.Green, style.Reset }) else std.fmt.comptimePrint("{s}(y/N){s}", .{ style.Red, style.Reset });
+    const hint = if (default_value) std.fmt.comptimePrint("{s}(Y/n){s}", .{ io.Green, io.Reset }) else std.fmt.comptimePrint("{s}(y/N){s}", .{ io.Red, io.Reset });
     if (msg) |value| {
-        try fmt.printTo(writer, "\n\n{s}{s}{s} {s}: ", .{ style.Yellow, value, style.Reset, hint });
+        try io.printTo(writer, "\n\n{s}{s}{s} {s}: ", .{ io.Yellow, value, io.Reset, hint });
     } else {
-        try fmt.printTo(writer, "\n\n{s}Proceed?{s} {s}: ", .{ style.Yellow, style.Reset, hint });
+        try io.printTo(writer, "\n\n{s}Proceed?{s} {s}: ", .{ io.Yellow, io.Reset, hint });
     }
     try writer.flush();
 }
@@ -97,14 +79,6 @@ test "printTitle alloc failure" {
     var fa = std.testing.FailingAllocator.init(std.testing.allocator, .{ .fail_index = 0 });
     const fa_alloc = fa.allocator();
     try std.testing.expectError(error.OutOfMemory, printTitle(&writer, "ZIX", fa_alloc));
-}
-
-test "run basic commands" {
-    const io = std.testing.io;
-    try std.testing.expectEqual(@as(i32, 0), try run(io, "true", .{}));
-    try std.testing.expectEqual(@as(i32, 1), try run(io, "false", .{}));
-    try std.testing.expectEqual(@as(i32, 1), try run(io, "kill -9 $$", .{}));
-    try std.testing.expectEqual(@as(i32, 0), try run(io, "", .{ .output = false }));
 }
 
 test "confirm responses" {

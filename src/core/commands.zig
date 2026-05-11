@@ -1,18 +1,17 @@
 const std = @import("std");
-const fmt = @import("fmt.zig");
-const style = @import("style.zig");
+const io = @import("io.zig");
 const Config = @import("../app/init.zig").Config;
 
 fn printConfigLine(writer: *std.Io.Writer, label: []const u8, value: anytype, options: struct { new_line: bool = true }) !void {
     const value_fmt = comptime if (@TypeOf(value) == []const u8) "{s}" else "{}";
-    try fmt.printTo(writer, "{s}◉ {s}{s}{s} = {s}" ++ value_fmt ++ "{s}{s}", .{
-        style.Cyan,
-        style.Red,
+    try io.printTo(writer, "{s}◉ {s}{s}{s} = {s}" ++ value_fmt ++ "{s}{s}", .{
+        io.Cyan,
+        io.Red,
         label,
-        style.Reset,
-        style.Cyan,
+        io.Reset,
+        io.Cyan,
         value,
-        style.Reset,
+        io.Reset,
         if (options.new_line) "\n" else "",
     });
 }

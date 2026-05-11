@@ -1,8 +1,9 @@
 const std = @import("std");
 const app = @import("app/init.zig");
 const cli = @import("app/cli.zig");
-const tools = @import("utils/tools.zig");
-const cmd = @import("utils/commands.zig");
+const ui = @import("core/ui.zig");
+const process = @import("core/process.zig");
+const cmd = @import("core/commands.zig");
 
 pub fn main(init: std.process.Init) !void {
     const alloc = init.gpa;
@@ -22,9 +23,9 @@ pub fn main(init: std.process.Init) !void {
     var stdin_reader = stdin_file.reader(init.io, &stdin_buf);
 
     const deps = cli.Deps{
-        .run = tools.run,
-        .confirm = tools.confirm,
-        .printTitle = tools.printTitle,
+        .run = process.run,
+        .confirm = ui.confirm,
+        .printTitle = ui.printTitle,
         .configPrint = cmd.configPrint,
     };
 
@@ -34,9 +35,9 @@ pub fn main(init: std.process.Init) !void {
 test {
     _ = @import("app/init.zig");
     _ = @import("app/cli.zig");
-    _ = @import("utils/fmt.zig");
-    _ = @import("utils/style.zig");
-    _ = @import("utils/commands.zig");
-    _ = @import("utils/tools.zig");
+    _ = @import("core/io.zig");
+    _ = @import("core/commands.zig");
+    _ = @import("core/ui.zig");
+    _ = @import("core/process.zig");
     _ = @import("zon");
 }

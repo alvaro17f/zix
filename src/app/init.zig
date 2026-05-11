@@ -143,11 +143,6 @@ test "printVersion writes version" {
     try std.testing.expect(std.mem.indexOf(u8, out, VERSION) != null);
 }
 
-test "getHostname non-empty" {
-    // getHostname is dead code in production (Config.defaults inlines it)
-    // Keep test for documentation purposes
-}
-
 test "configPrint renders all fields" {
     var buf: [1024]u8 = undefined;
     var writer = std.Io.Writer.fixed(&buf);

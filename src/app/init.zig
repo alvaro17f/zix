@@ -12,6 +12,17 @@ pub const Config = struct {
     keep: u8,
     update: bool,
     diff: bool,
+
+    pub fn defaults() Config {
+        var buf: [std.posix.HOST_NAME_MAX]u8 = undefined;
+        return .{
+            .repo = "~/.dotfiles",
+            .hostname = std.posix.gethostname(&buf) catch "unknown",
+            .keep = 10,
+            .update = false,
+            .diff = false,
+        };
+    }
 };
 
 pub fn printHelp(writer: *std.Io.Writer) !void {
@@ -41,15 +52,7 @@ pub fn getHostname(buffer: *[64]u8) []const u8 {
 }
 
 pub fn run(io: std.Io, writer: *std.Io.Writer, reader: *std.Io.Reader, args: []const []const u8, deps: cli_module.Deps, alloc: std.mem.Allocator) !void {
-    var hostname_buffer: [std.posix.HOST_NAME_MAX]u8 = undefined;
-
-    var config = Config{
-        .repo = "~/.dotfiles",
-        .hostname = getHostname(&hostname_buffer),
-        .keep = 10,
-        .update = false,
-        .diff = false,
-    };
+    var config = Config.defaults();
 
     if (args.len <= 1) {
         return try cli(io, writer, reader, config, deps, alloc);
@@ -100,9 +103,9 @@ pub fn run(io: std.Io, writer: *std.Io.Writer, reader: *std.Io.Reader, args: []c
     return try cli(io, writer, reader, config, deps, alloc);
 }
 
-fn mockRun(_: std.Io, _: []const u8, _: cli_module.RunOpts) anyerror!i32 { var x: i32 = 0; x += 1; return x - 1; }
+fn mockRun(_: std.Io, _: []const u8, _: @import("../utils/tools.zig").RunOpts) anyerror!i32 { return 0; }
 noinline fn mockConfirm(_: *std.Io.Reader, _: *std.Io.Writer, _: bool, _: ?[]const u8, _: std.mem.Allocator) anyerror!bool { return true; }
-noinline fn mockTitleMaker(_: *std.Io.Writer, _: []const u8, _: std.mem.Allocator) anyerror!void {}
+noinline fn mockPrintTitle(_: *std.Io.Writer, _: []const u8, _: std.mem.Allocator) anyerror!void {}
 noinline fn mockConfigPrint(_: *std.Io.Writer, _: Config) anyerror!void {}
 
 test "printHelp writes help text" {
@@ -151,7 +154,7 @@ test "run flag branches" {
     const mock_deps = cli_module.Deps{
         .run = mockRun,
         .confirm = mockConfirm,
-        .titleMaker = mockTitleMaker,
+        .printTitle = mockPrintTitle,
         .configPrint = mockConfigPrint,
     };
 
@@ -174,7 +177,7 @@ test "run reaches cli" {
     const mock_deps = cli_module.Deps{
         .run = mockRun,
         .confirm = mockConfirm,
-        .titleMaker = mockTitleMaker,
+        .printTitle = mockPrintTitle,
         .configPrint = mockConfigPrint,
     };
 

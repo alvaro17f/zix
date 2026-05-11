@@ -3,11 +3,9 @@ const fmt = @import("fmt.zig");
 const eql = std.mem.eql;
 const style = @import("style.zig");
 
-pub fn titleMaker(writer: *std.Io.Writer, text: []const u8, alloc: std.mem.Allocator) !void {
-    return titleMakerAlloc(writer, text, alloc);
-}
+pub const RunOpts = struct { output: bool = true };
 
-pub fn titleMakerAlloc(writer: *std.Io.Writer, text: []const u8, alloc: std.mem.Allocator) !void {
+pub fn printTitle(writer: *std.Io.Writer, text: []const u8, alloc: std.mem.Allocator) !void {
     const border = alloc.alloc(u8, text.len + 4) catch |err| {
         std.log.err("Failed to allocate memory: {}", .{err});
         return err;
@@ -19,7 +17,7 @@ pub fn titleMakerAlloc(writer: *std.Io.Writer, text: []const u8, alloc: std.mem.
     try fmt.printTo(writer, "{s}\n{s}\n* {s}{s}{s} *\n{s}\n{s}", .{ style.Blue, border, style.Red, text, style.Blue, border, style.Reset });
 }
 
-pub fn run(io: std.Io, command: []const u8, opts: @import("../app/cli.zig").RunOpts) !i32 {
+pub fn run(io: std.Io, command: []const u8, opts: RunOpts) !i32 {
     const shellCommand = [_][]const u8{ "sh", "-c", command };
     var child = try std.process.spawn(io, .{
         .argv = &shellCommand,
@@ -39,18 +37,27 @@ pub fn confirm(reader: *std.Io.Reader, writer: *std.Io.Writer, default_value: bo
     return confirmStdin(writer, default_value, msg, alloc);
 }
 
-fn confirmStdin(writer: *std.Io.Writer, default_value: bool, msg: ?[]const u8, alloc: std.mem.Allocator) !bool {
-    const default_value_str = if (default_value == true)
-        std.fmt.comptimePrint("{s}(Y/n){s}", .{ style.Green, style.Reset })
-    else
-        std.fmt.comptimePrint("{s}(y/N){s}", .{ style.Red, style.Reset });
-
+fn writeConfirmPrompt(writer: *std.Io.Writer, default_value: bool, msg: ?[]const u8) !void {
+    const hint = if (default_value) std.fmt.comptimePrint("{s}(Y/n){s}", .{ style.Green, style.Reset }) else std.fmt.comptimePrint("{s}(y/N){s}", .{ style.Red, style.Reset });
     if (msg) |value| {
-        try fmt.printTo(writer, "\n\n{s}{s}{s} {s}: ", .{ style.Yellow, value, style.Reset, default_value_str });
+        try fmt.printTo(writer, "\n\n{s}{s}{s} {s}: ", .{ style.Yellow, value, style.Reset, hint });
     } else {
-        try fmt.printTo(writer, "\n\n{s}Proceed?{s} {s}: ", .{ style.Yellow, style.Reset, default_value_str });
+        try fmt.printTo(writer, "\n\n{s}Proceed?{s} {s}: ", .{ style.Yellow, style.Reset, hint });
     }
     try writer.flush();
+}
+
+fn parseConfirmResponse(line: []const u8, default_value: bool, alloc: std.mem.Allocator) !bool {
+    const response = std.ascii.allocLowerString(alloc, line) catch return default_value;
+    defer alloc.free(response);
+    if (eql(u8, response, "y") or eql(u8, response, "yes")) return true;
+    if (eql(u8, response, "n") or eql(u8, response, "no")) return false;
+    if (eql(u8, response, "") or line.len == 0) return default_value;
+    return false;
+}
+
+fn confirmStdin(writer: *std.Io.Writer, default_value: bool, msg: ?[]const u8, alloc: std.mem.Allocator) !bool {
+    try writeConfirmPrompt(writer, default_value, msg);
 
     var buf: [256]u8 = undefined;
     var i: usize = 0;
@@ -60,70 +67,36 @@ fn confirmStdin(writer: *std.Io.Writer, default_value: bool, msg: ?[]const u8, a
             return err;
         };
         if (n == 0) return false;
-        if (buf[i] == '\n') {
-            const line = buf[0..i];
-            const response = std.ascii.allocLowerString(alloc, line) catch return default_value;
-            defer alloc.free(response);
-
-            if (eql(u8, response, "y") or eql(u8, response, "yes")) return true;
-            if (eql(u8, response, "n") or eql(u8, response, "no")) return false;
-            if (eql(u8, response, "") or line.len == 0) return default_value;
-            return false;
-        }
+        if (buf[i] == '\n') return parseConfirmResponse(buf[0..i], default_value, alloc);
         i += 1;
     }
     return false;
 }
 
 pub fn confirmAlloc(reader: *std.Io.Reader, writer: *std.Io.Writer, default_value: bool, msg: ?[]const u8, alloc: std.mem.Allocator) !bool {
-    const default_value_str = if (default_value == true)
-        std.fmt.comptimePrint("{s}(Y/n){s}", .{ style.Green, style.Reset })
-    else
-        std.fmt.comptimePrint("{s}(y/N){s}", .{ style.Red, style.Reset });
-
-    if (msg) |value| {
-        try fmt.printTo(writer, "\n\n{s}{s}{s} {s}: ", .{ style.Yellow, value, style.Reset, default_value_str });
-    } else {
-        try fmt.printTo(writer, "\n\n{s}Proceed?{s} {s}: ", .{ style.Yellow, style.Reset, default_value_str });
-    }
-    try writer.flush();
+    try writeConfirmPrompt(writer, default_value, msg);
 
     const line = reader.takeDelimiterExclusive('\n') catch |err| {
-        if (err == error.EndOfStream) {
-            return false;
-        }
+        if (err == error.EndOfStream) return false;
         return err;
     };
-    const response = std.ascii.allocLowerString(alloc, line) catch {
-        return default_value;
-    };
-    defer alloc.free(response);
-
-    if (eql(u8, response, "y") or eql(u8, response, "yes")) {
-        return true;
-    } else if (eql(u8, response, "n") or eql(u8, response, "no")) {
-        return false;
-    } else if (eql(u8, response, "\n") or eql(u8, response, "")) {
-        return default_value;
-    } else {
-        return false;
-    }
+    return parseConfirmResponse(line, default_value, alloc);
 }
 
-test "titleMaker border format" {
+test "printTitle border format" {
     var buf: [256]u8 = undefined;
     var writer = std.Io.Writer.fixed(&buf);
-    try titleMaker(&writer, "ZIX", std.testing.allocator);
+    try printTitle(&writer, "ZIX", std.testing.allocator);
     const s = std.mem.sliceTo(&buf, '\n');
     try std.testing.expect(s.len > 0);
 }
 
-test "titleMaker alloc failure" {
+test "printTitle alloc failure" {
     var buf: [256]u8 = undefined;
     var writer = std.Io.Writer.fixed(&buf);
     var fa = std.testing.FailingAllocator.init(std.testing.allocator, .{ .fail_index = 0 });
     const fa_alloc = fa.allocator();
-    try std.testing.expectError(error.OutOfMemory, titleMakerAlloc(&writer, "ZIX", fa_alloc));
+    try std.testing.expectError(error.OutOfMemory, printTitle(&writer, "ZIX", fa_alloc));
 }
 
 test "run basic commands" {

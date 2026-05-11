@@ -24,7 +24,7 @@ pub fn main(init: std.process.Init) !void {
     const deps = cli.Deps{
         .run = tools.run,
         .confirm = tools.confirm,
-        .titleMaker = tools.titleMaker,
+        .printTitle = tools.printTitle,
         .configPrint = cmd.configPrint,
     };
 

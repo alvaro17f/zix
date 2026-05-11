@@ -1,7 +1,6 @@
 const std = @import("std");
 const fmt = @import("fmt.zig");
 const style = @import("style.zig");
-const builtin = @import("builtin");
 const Config = @import("../app/init.zig").Config;
 
 fn printConfigLine(writer: *std.Io.Writer, label: []const u8, value: anytype, options: struct { new_line: bool = true }) !void {

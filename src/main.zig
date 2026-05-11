@@ -3,7 +3,6 @@ const app = @import("app/init.zig");
 const cli = @import("app/cli.zig");
 const ui = @import("core/ui.zig");
 const process = @import("core/process.zig");
-const cmd = @import("core/commands.zig");
 
 pub fn main(init: std.process.Init) !void {
     const alloc = init.gpa;
@@ -22,7 +21,7 @@ pub fn main(init: std.process.Init) !void {
         .run = process.run,
         .confirm = ui.confirm,
         .printTitle = ui.printTitle,
-        .configPrint = cmd.configPrint,
+        .configPrint = app.configPrint,
     };
 
     try app.run(init.io, &stdout_writer.interface, args_list.items, deps, alloc);

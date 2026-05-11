@@ -24,25 +24,25 @@ pub fn cli(cli_io: std.Io, writer: *std.Io.Writer, config: Config, deps: Deps, a
 
         if (config.update) {
             try deps.printTitle(writer, "Nix Update", alloc);
-            _ = try deps.run(cli_io, try cmd.nixUpdate(allocator, config.repo), .{});
+            _ = try runShell(cli_io, deps, try cmd.nixUpdate(allocator, config.repo), .{});
         }
 
         try stageGitChanges(cli_io, writer, allocator, config.repo, deps, alloc);
 
         try deps.printTitle(writer, "Nixos Rebuild", alloc);
-        _ = try deps.run(cli_io, try cmd.nixRebuild(allocator, config.repo, config.hostname), .{});
-        _ = try deps.run(cli_io, try cmd.nixKeep(allocator, config.keep), .{});
+        _ = try runShell(cli_io, deps, try cmd.nixRebuild(allocator, config.repo, config.hostname), .{});
+        _ = try runShell(cli_io, deps, try cmd.nixKeep(allocator, config.keep), .{});
 
         if (config.diff) {
             try deps.printTitle(writer, "Nix Diff", alloc);
-            _ = try deps.run(cli_io, cmd.nixDiff, .{});
+            _ = try runShell(cli_io, deps, cmd.nixDiff, .{});
         }
     }
 }
 
 fn pullRepo(cli_io: std.Io, writer: *std.Io.Writer, allocator: std.mem.Allocator, repo: []const u8, deps: Deps, alloc: std.mem.Allocator) !void {
     try deps.printTitle(writer, "Git Pull", alloc);
-    const status = try deps.run(cli_io, try cmd.gitPull(allocator, repo), .{});
+    const status = try runShell(cli_io, deps, try cmd.gitPull(allocator, repo), .{});
     if (status != 0) {
         try io.printTo(writer, "{s}Failed to pull changes{s}\n", .{ io.Red, io.Reset });
         return error.GitPullFailed;
@@ -50,19 +50,23 @@ fn pullRepo(cli_io: std.Io, writer: *std.Io.Writer, allocator: std.mem.Allocator
 }
 
 fn stageGitChanges(cli_io: std.Io, writer: *std.Io.Writer, allocator: std.mem.Allocator, repo: []const u8, deps: Deps, alloc: std.mem.Allocator) !void {
-    if (try deps.run(cli_io, try cmd.gitDiff(allocator, repo), .{ .output = false }) != 1) return;
+    if (try runShell(cli_io, deps, try cmd.gitDiff(allocator, repo), .{ .output = false }) != 1) return;
 
     try deps.printTitle(writer, "Git Changes", alloc);
-    _ = try deps.run(cli_io, try cmd.gitStatus(allocator, repo), .{});
+    _ = try runShell(cli_io, deps, try cmd.gitStatus(allocator, repo), .{});
 
     if (try deps.confirm(writer, true, "Do you want to add these changes to the stage?", alloc)) {
-        _ = deps.run(cli_io, try cmd.gitAdd(allocator, repo), .{}) catch |err| {
+        _ = runShell(cli_io, deps, try cmd.gitAdd(allocator, repo), .{}) catch |err| {
             try io.printTo(writer, "Failed to add changes to the stage: {}\n", .{err});
         };
         try io.printTo(writer, "{s}Changes added to git stage successfully{s}\n", .{ io.Green, io.Reset });
     } else {
         try io.printTo(writer, "{s}Changes not added to stage{s}\n", .{ io.Red, io.Reset });
     }
+}
+
+fn runShell(cli_io: std.Io, deps: Deps, command: []const u8, opts: process.RunOpts) !i32 {
+    return deps.run(cli_io, command, opts);
 }
 
 fn mockRun(_: std.Io, c: []const u8, _: process.RunOpts) anyerror!i32 {

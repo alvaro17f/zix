@@ -1,29 +1,4 @@
 const std = @import("std");
-const io = @import("io.zig");
-const Config = @import("../app/init.zig").Config;
-
-fn printConfigLine(writer: *std.Io.Writer, label: []const u8, value: anytype, options: struct { new_line: bool = true }) !void {
-    const value_fmt = comptime if (@TypeOf(value) == []const u8) "{s}" else "{}";
-    try io.printTo(writer, "{s}◉ {s}{s}{s} = {s}" ++ value_fmt ++ "{s}{s}", .{
-        io.Cyan,
-        io.Red,
-        label,
-        io.Reset,
-        io.Cyan,
-        value,
-        io.Reset,
-        if (options.new_line) "\n" else "",
-    });
-}
-
-pub fn configPrint(writer: *std.Io.Writer, config: Config) !void {
-    const fields = @typeInfo(Config).@"struct".fields;
-    inline for (fields, 0..) |field, i| {
-        const is_last = i == fields.len - 1;
-        const value = @field(config, field.name);
-        try printConfigLine(writer, field.name, value, .{ .new_line = !is_last });
-    }
-}
 
 pub fn gitPull(allocator: std.mem.Allocator, repo: []const u8) ![]const u8 {
     return std.fmt.allocPrint(allocator, "git -C {s} pull", .{repo});
@@ -78,22 +53,4 @@ test "command strings" {
     const s6 = try nixKeep(alloc, 5);
     defer alloc.free(s6);
     try std.testing.expectEqualStrings("sudo nix-env --profile /nix/var/nix/profiles/system --delete-generations +5", s6);
-}
-
-test "configPrint renders all fields" {
-    var buf: [1024]u8 = undefined;
-    var writer = std.Io.Writer.fixed(&buf);
-    const config = Config{
-        .repo = "~/.dotfiles",
-        .hostname = "nixos",
-        .keep = 10,
-        .update = false,
-        .diff = true,
-    };
-    try configPrint(&writer, config);
-    try std.testing.expect(std.mem.indexOf(u8, &buf, "repo") != null);
-    try std.testing.expect(std.mem.indexOf(u8, &buf, "hostname") != null);
-    try std.testing.expect(std.mem.indexOf(u8, &buf, "keep") != null);
-    try std.testing.expect(std.mem.indexOf(u8, &buf, "update") != null);
-    try std.testing.expect(std.mem.indexOf(u8, &buf, "diff") != null);
 }

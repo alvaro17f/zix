@@ -18,10 +18,6 @@ pub fn main(init: std.process.Init) !void {
     const stdout_file = std.Io.File.stdout();
     var stdout_writer = stdout_file.writer(init.io, &stdout_buf);
 
-    var stdin_buf: [1024]u8 = undefined;
-    const stdin_file = std.Io.File.stdin();
-    var stdin_reader = stdin_file.reader(init.io, &stdin_buf);
-
     const deps = cli.Deps{
         .run = process.run,
         .confirm = ui.confirm,
@@ -29,7 +25,7 @@ pub fn main(init: std.process.Init) !void {
         .configPrint = cmd.configPrint,
     };
 
-    try app.run(init.io, &stdout_writer.interface, &stdin_reader.interface, args_list.items, deps, alloc);
+    try app.run(init.io, &stdout_writer.interface, args_list.items, deps, alloc);
 }
 
 test {

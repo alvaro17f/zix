@@ -51,11 +51,11 @@ pub fn getHostname(buffer: *[64]u8) []const u8 {
     return std.posix.gethostname(buffer) catch "unknown";
 }
 
-pub fn run(cli_io: std.Io, writer: *std.Io.Writer, reader: *std.Io.Reader, args: []const []const u8, deps: cli_module.Deps, alloc: std.mem.Allocator) !void {
+pub fn run(cli_io: std.Io, writer: *std.Io.Writer, args: []const []const u8, deps: cli_module.Deps, alloc: std.mem.Allocator) !void {
     var config = Config.defaults();
 
     if (args.len <= 1) {
-        return try cli(cli_io, writer, reader, config, deps, alloc);
+        return try cli(cli_io, writer, config, deps, alloc);
     }
 
     for (args[1..], 0..) |arg, idx| {
@@ -100,11 +100,11 @@ pub fn run(cli_io: std.Io, writer: *std.Io.Writer, reader: *std.Io.Reader, args:
         }
     }
 
-    return try cli(cli_io, writer, reader, config, deps, alloc);
+    return try cli(cli_io, writer, config, deps, alloc);
 }
 
 fn mockRun(_: std.Io, _: []const u8, _: process.RunOpts) anyerror!i32 { return 0; }
-noinline fn mockConfirm(_: *std.Io.Reader, _: *std.Io.Writer, _: bool, _: ?[]const u8, _: std.mem.Allocator) anyerror!bool { return true; }
+noinline fn mockConfirm(_: *std.Io.Writer, _: bool, _: ?[]const u8, _: std.mem.Allocator) anyerror!bool { return true; }
 noinline fn mockPrintTitle(_: *std.Io.Writer, _: []const u8, _: std.mem.Allocator) anyerror!void {}
 noinline fn mockConfigPrint(_: *std.Io.Writer, _: Config) anyerror!void {}
 
@@ -161,7 +161,7 @@ test "run flag branches" {
     for (cases) |tc| {
         var buf: [2048]u8 = undefined;
         var writer = std.Io.Writer.fixed(&buf);
-        run(test_io, &writer, std.Io.Reader.ending, tc.args, mock_deps, std.testing.allocator) catch continue;
+        run(test_io, &writer, tc.args, mock_deps, std.testing.allocator) catch continue;
         if (tc.expect_contains) |needle| {
             const out = std.mem.sliceTo(&buf, 0);
             try std.testing.expect(std.mem.indexOf(u8, out, needle) != null);
@@ -181,5 +181,5 @@ test "run reaches cli" {
         .configPrint = mockConfigPrint,
     };
 
-    try run(test_io, &writer, std.Io.Reader.ending, &.{"zix"}, mock_deps, std.testing.allocator);
+    try run(test_io, &writer, &.{"zix"}, mock_deps, std.testing.allocator);
 }

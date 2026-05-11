@@ -14,8 +14,7 @@ pub fn printTitle(writer: *std.Io.Writer, text: []const u8, alloc: std.mem.Alloc
     try io.printTo(writer, "{s}\n{s}\n* {s}{s}{s} *\n{s}\n{s}", .{ io.Blue, border, io.Red, text, io.Blue, border, io.Reset });
 }
 
-pub fn confirm(reader: *std.Io.Reader, writer: *std.Io.Writer, default_value: bool, msg: ?[]const u8, alloc: std.mem.Allocator) !bool {
-    _ = reader;
+pub fn confirm(writer: *std.Io.Writer, default_value: bool, msg: ?[]const u8, alloc: std.mem.Allocator) !bool {
     return confirmStdin(writer, default_value, msg, alloc);
 }
 

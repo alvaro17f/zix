@@ -1,5 +1,4 @@
 const std = @import("std");
-const allocator = @import("../utils/allocator.zig").allocator;
 const fmt = @import("../utils/fmt.zig");
 const cli_module = @import("./cli.zig");
 const cli = cli_module.cli;
@@ -41,7 +40,7 @@ pub fn getHostname(buffer: *[64]u8) []const u8 {
     return std.posix.gethostname(buffer) catch "unknown";
 }
 
-pub fn run(io: std.Io, writer: *std.Io.Writer, reader: *std.Io.Reader, args: []const []const u8, deps: cli_module.Deps) !void {
+pub fn run(io: std.Io, writer: *std.Io.Writer, reader: *std.Io.Reader, args: []const []const u8, deps: cli_module.Deps, alloc: std.mem.Allocator) !void {
     var hostname_buffer: [std.posix.HOST_NAME_MAX]u8 = undefined;
 
     var config = Config{
@@ -53,7 +52,7 @@ pub fn run(io: std.Io, writer: *std.Io.Writer, reader: *std.Io.Reader, args: []c
     };
 
     if (args.len <= 1) {
-        return try cli(io, writer, reader, config, deps);
+        return try cli(io, writer, reader, config, deps, alloc);
     }
 
     for (args[1..], 0..) |arg, idx| {
@@ -98,12 +97,12 @@ pub fn run(io: std.Io, writer: *std.Io.Writer, reader: *std.Io.Reader, args: []c
         }
     }
 
-    return try cli(io, writer, reader, config, deps);
+    return try cli(io, writer, reader, config, deps, alloc);
 }
 
 fn mockRun(_: std.Io, _: []const u8, _: cli_module.RunOpts) anyerror!i32 { var x: i32 = 0; x += 1; return x - 1; }
-noinline fn mockConfirm(_: *std.Io.Reader, _: *std.Io.Writer, _: bool, _: ?[]const u8) anyerror!bool { return true; }
-noinline fn mockTitleMaker(_: *std.Io.Writer, _: []const u8) anyerror!void {}
+noinline fn mockConfirm(_: *std.Io.Reader, _: *std.Io.Writer, _: bool, _: ?[]const u8, _: std.mem.Allocator) anyerror!bool { return true; }
+noinline fn mockTitleMaker(_: *std.Io.Writer, _: []const u8, _: std.mem.Allocator) anyerror!void {}
 noinline fn mockConfigPrint(_: *std.Io.Writer, _: Config) anyerror!void {}
 
 test "printHelp writes help text" {
@@ -159,7 +158,7 @@ test "run flag branches" {
     for (cases) |tc| {
         var buf: [2048]u8 = undefined;
         var writer = std.Io.Writer.fixed(&buf);
-        run(io, &writer, std.Io.Reader.ending, tc.args, mock_deps) catch continue;
+        run(io, &writer, std.Io.Reader.ending, tc.args, mock_deps, std.testing.allocator) catch continue;
         if (tc.expect_contains) |needle| {
             const out = std.mem.sliceTo(&buf, 0);
             try std.testing.expect(std.mem.indexOf(u8, out, needle) != null);
@@ -179,5 +178,5 @@ test "run reaches cli" {
         .configPrint = mockConfigPrint,
     };
 
-    try run(io, &writer, std.Io.Reader.ending, &.{"zix"}, mock_deps);
+    try run(io, &writer, std.Io.Reader.ending, &.{"zix"}, mock_deps, std.testing.allocator);
 }

@@ -1,5 +1,4 @@
 const std = @import("std");
-const Arena = @import("../utils/allocator.zig").Arena;
 const fmt = @import("../utils/fmt.zig");
 const cmd = @import("../utils/commands.zig");
 const Config = @import("init.zig").Config;
@@ -9,21 +8,21 @@ pub const RunOpts = struct { output: bool = true };
 
 pub const Deps = struct {
     run: *const fn (std.Io, []const u8, RunOpts) anyerror!i32,
-    confirm: *const fn (*std.Io.Reader, *std.Io.Writer, bool, ?[]const u8) anyerror!bool,
-    titleMaker: *const fn (*std.Io.Writer, []const u8) anyerror!void,
+    confirm: *const fn (*std.Io.Reader, *std.Io.Writer, bool, ?[]const u8, std.mem.Allocator) anyerror!bool,
+    titleMaker: *const fn (*std.Io.Writer, []const u8, std.mem.Allocator) anyerror!void,
     configPrint: *const fn (*std.Io.Writer, Config) anyerror!void,
 };
 
-pub fn cli(io: std.Io, writer: *std.Io.Writer, reader: *std.Io.Reader, config: Config, deps: Deps) !void {
-    var arena = Arena.init();
+pub fn cli(io: std.Io, writer: *std.Io.Writer, reader: *std.Io.Reader, config: Config, deps: Deps, alloc: std.mem.Allocator) !void {
+    var arena = std.heap.ArenaAllocator.init(alloc);
     defer arena.deinit();
     const allocator = arena.allocator();
 
-    try deps.titleMaker(writer, "ZIX Configuration");
+    try deps.titleMaker(writer, "ZIX Configuration", alloc);
     try deps.configPrint(writer, config);
 
-    if (try deps.confirm(reader, writer, true, null)) {
-        try deps.titleMaker(writer, "Git Pull");
+    if (try deps.confirm(reader, writer, true, null, alloc)) {
+        try deps.titleMaker(writer, "Git Pull", alloc);
         const git_pull_status = try deps.run(io, try cmd.gitPull(allocator, config.repo), .{});
 
         if (git_pull_status != 0) {
@@ -32,26 +31,26 @@ pub fn cli(io: std.Io, writer: *std.Io.Writer, reader: *std.Io.Reader, config: C
         }
 
         if (config.update) {
-            try deps.titleMaker(writer, "Nix Update");
+            try deps.titleMaker(writer, "Nix Update", alloc);
             _ = try deps.run(io, try cmd.nixUpdate(allocator, config.repo), .{});
         }
 
         if (try deps.run(io, try cmd.gitDiff(allocator, config.repo), .{ .output = false }) == 1) {
-            try deps.titleMaker(writer, "Git Changes");
+            try deps.titleMaker(writer, "Git Changes", alloc);
             _ = try deps.run(io, try cmd.gitStatus(allocator, config.repo), .{});
 
-            if (try deps.confirm(reader, writer, true, "Do you want to add these changes to the stage?")) {
+            if (try deps.confirm(reader, writer, true, "Do you want to add these changes to the stage?", alloc)) {
                 _ = deps.run(io, try cmd.gitAdd(allocator, config.repo), .{}) catch |err| { try fmt.printTo(writer, "Failed to add changes to the stage: {}\n", .{err}); };
                 try fmt.printTo(writer, "\n{s}Changes added to git stage successfully{s}\n", .{ style.Green, style.Reset });
             }
         }
 
-        try deps.titleMaker(writer, "Nixos Rebuild");
+        try deps.titleMaker(writer, "Nixos Rebuild", alloc);
         _ = try deps.run(io, try cmd.nixRebuild(allocator, config.repo, config.hostname), .{});
         _ = try deps.run(io, try cmd.nixKeep(allocator, config.keep), .{});
 
         if (config.diff) {
-            try deps.titleMaker(writer, "Nix Diff");
+            try deps.titleMaker(writer, "Nix Diff", alloc);
             _ = try deps.run(io, cmd.nixDiff, .{});
         }
     }
@@ -63,9 +62,9 @@ fn mockRun(_: std.Io, c: []const u8, _: RunOpts) anyerror!i32 {
     }
     return 0;
 }
-fn mockConfirmTrue(_: *std.Io.Reader, _: *std.Io.Writer, _: bool, _: ?[]const u8) anyerror!bool { return true; }
-fn mockConfirmFalse(_: *std.Io.Reader, _: *std.Io.Writer, _: bool, _: ?[]const u8) anyerror!bool { return false; }
-fn mockTitleMaker(_: *std.Io.Writer, _: []const u8) anyerror!void {}
+fn mockConfirmTrue(_: *std.Io.Reader, _: *std.Io.Writer, _: bool, _: ?[]const u8, _: std.mem.Allocator) anyerror!bool { return true; }
+fn mockConfirmFalse(_: *std.Io.Reader, _: *std.Io.Writer, _: bool, _: ?[]const u8, _: std.mem.Allocator) anyerror!bool { return false; }
+fn mockTitleMaker(_: *std.Io.Writer, _: []const u8, _: std.mem.Allocator) anyerror!void {}
 fn mockConfigPrint(_: *std.Io.Writer, _: Config) anyerror!void {}
 
 test "cli branches" {
@@ -88,7 +87,7 @@ test "cli branches" {
         .titleMaker = mockTitleMaker,
         .configPrint = mockConfigPrint,
     };
-    try cli(io, &writer, reader, Config{ .repo = "r", .hostname = "h", .keep = 1, .update = false, .diff = false }, no_deps);
+    try cli(io, &writer, reader, Config{ .repo = "r", .hostname = "h", .keep = 1, .update = false, .diff = false }, no_deps, std.testing.allocator);
 
     // git pull fails
     const fail_deps = Deps{
@@ -99,10 +98,10 @@ test "cli branches" {
         .titleMaker = mockTitleMaker,
         .configPrint = mockConfigPrint,
     };
-    try std.testing.expectError(error.GitPullFailed, cli(io, &writer, reader, Config{ .repo = "r", .hostname = "h", .keep = 1, .update = false, .diff = false }, fail_deps));
+    try std.testing.expectError(error.GitPullFailed, cli(io, &writer, reader, Config{ .repo = "r", .hostname = "h", .keep = 1, .update = false, .diff = false }, fail_deps, std.testing.allocator));
 
     // update + diff + git changes + add
-    try cli(io, &writer, reader, Config{ .repo = "r", .hostname = "h", .keep = 1, .update = true, .diff = true }, deps);
+    try cli(io, &writer, reader, Config{ .repo = "r", .hostname = "h", .keep = 1, .update = true, .diff = true }, deps, std.testing.allocator);
 }
 
 test "cli git add failure" {
@@ -124,5 +123,5 @@ test "cli git add failure" {
         .configPrint = mockConfigPrint,
     };
 
-    try cli(io, &writer, reader, Config{ .repo = "r", .hostname = "h", .keep = 1, .update = false, .diff = true }, add_fail_deps);
+    try cli(io, &writer, reader, Config{ .repo = "r", .hostname = "h", .keep = 1, .update = false, .diff = true }, add_fail_deps, std.testing.allocator);
 }

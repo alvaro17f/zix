@@ -1,20 +1,16 @@
 const std = @import("std");
-const detectLeaks = @import("utils/allocator.zig").detectLeaks;
 const app = @import("app/init.zig");
 const cli = @import("app/cli.zig");
 const tools = @import("utils/tools.zig");
 const cmd = @import("utils/commands.zig");
-const builtin = @import("builtin");
 
 pub fn main(init: std.process.Init) !void {
-    defer if (detectLeaks() > 0) {
-        std.process.exit(1);
-    };
+    const alloc = init.gpa;
 
     var args_list: std.ArrayList([]const u8) = .empty;
-    defer args_list.deinit(init.gpa);
+    defer args_list.deinit(alloc);
     for (init.minimal.args.vector) |arg_z| {
-        try args_list.append(init.gpa, std.mem.sliceTo(arg_z, 0));
+        try args_list.append(alloc, std.mem.sliceTo(arg_z, 0));
     }
 
     var stdout_buf: [4096]u8 = undefined;
@@ -32,13 +28,12 @@ pub fn main(init: std.process.Init) !void {
         .configPrint = cmd.configPrint,
     };
 
-    try app.run(init.io, &stdout_writer.interface, &stdin_reader.interface, args_list.items, deps);
+    try app.run(init.io, &stdout_writer.interface, &stdin_reader.interface, args_list.items, deps, alloc);
 }
 
 test {
     _ = @import("app/init.zig");
     _ = @import("app/cli.zig");
-    _ = @import("utils/allocator.zig");
     _ = @import("utils/fmt.zig");
     _ = @import("utils/style.zig");
     _ = @import("utils/commands.zig");

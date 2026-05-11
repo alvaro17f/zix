@@ -1,12 +1,10 @@
 const std = @import("std");
-const allocator = @import("allocator.zig").allocator;
 const fmt = @import("fmt.zig");
 const eql = std.mem.eql;
 const style = @import("style.zig");
-const builtin = @import("builtin");
 
-pub fn titleMaker(writer: *std.Io.Writer, text: []const u8) !void {
-    return titleMakerAlloc(writer, text, allocator);
+pub fn titleMaker(writer: *std.Io.Writer, text: []const u8, alloc: std.mem.Allocator) !void {
+    return titleMakerAlloc(writer, text, alloc);
 }
 
 pub fn titleMakerAlloc(writer: *std.Io.Writer, text: []const u8, alloc: std.mem.Allocator) !void {
@@ -36,9 +34,9 @@ pub fn run(io: std.Io, command: []const u8, opts: @import("../app/cli.zig").RunO
     }
 }
 
-pub fn confirm(reader: *std.Io.Reader, writer: *std.Io.Writer, default_value: bool, msg: ?[]const u8) !bool {
+pub fn confirm(reader: *std.Io.Reader, writer: *std.Io.Writer, default_value: bool, msg: ?[]const u8, alloc: std.mem.Allocator) !bool {
     _ = reader;
-    return confirmStdin(writer, default_value, msg, allocator);
+    return confirmStdin(writer, default_value, msg, alloc);
 }
 
 fn confirmStdin(writer: *std.Io.Writer, default_value: bool, msg: ?[]const u8, alloc: std.mem.Allocator) !bool {
@@ -115,7 +113,7 @@ pub fn confirmAlloc(reader: *std.Io.Reader, writer: *std.Io.Writer, default_valu
 test "titleMaker border format" {
     var buf: [256]u8 = undefined;
     var writer = std.Io.Writer.fixed(&buf);
-    try titleMaker(&writer, "ZIX");
+    try titleMaker(&writer, "ZIX", std.testing.allocator);
     const s = std.mem.sliceTo(&buf, '\n');
     try std.testing.expect(s.len > 0);
 }

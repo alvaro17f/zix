@@ -59,7 +59,9 @@ fn stageGitChanges(cli_io: std.Io, writer: *std.Io.Writer, reader: *std.Io.Reade
         _ = deps.run(cli_io, try cmd.gitAdd(allocator, repo), .{}) catch |err| {
             try io.printTo(writer, "Failed to add changes to the stage: {}\n", .{err});
         };
-        try io.printTo(writer, "\n{s}Changes added to git stage successfully{s}\n", .{ io.Green, io.Reset });
+        try io.printTo(writer, "{s}Changes added to git stage successfully{s}\n", .{ io.Green, io.Reset });
+    } else {
+        try io.printTo(writer, "{s}Changes not added to stage{s}\n", .{ io.Red, io.Reset });
     }
 }
 

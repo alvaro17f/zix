@@ -22,7 +22,7 @@ pub fn confirm(reader: *std.Io.Reader, writer: *std.Io.Writer, default_value: bo
 fn writeConfirmPrompt(writer: *std.Io.Writer, default_value: bool, msg: ?[]const u8) !void {
     const hint = if (default_value) std.fmt.comptimePrint("{s}(Y/n){s}", .{ io.Green, io.Reset }) else std.fmt.comptimePrint("{s}(y/N){s}", .{ io.Red, io.Reset });
     if (msg) |value| {
-        try io.printTo(writer, "\n\n{s}{s}{s} {s}: ", .{ io.Yellow, value, io.Reset, hint });
+        try io.printTo(writer, "{s}{s}{s} {s}: ", .{ io.Yellow, value, io.Reset, hint });
     } else {
         try io.printTo(writer, "\n\n{s}Proceed?{s} {s}: ", .{ io.Yellow, io.Reset, hint });
     }

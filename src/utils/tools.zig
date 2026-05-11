@@ -55,7 +55,7 @@ pub fn confirmAlloc(reader: *std.Io.Reader, writer: *std.Io.Writer, default_valu
 
     const line = reader.takeDelimiterExclusive('\n') catch |err| {
         if (err == error.EndOfStream) {
-            return default_value;
+            return false;
         }
         return err;
     };
@@ -115,7 +115,7 @@ test "confirm responses" {
         .{ .input = "\n", .default_value = false, .expected = false },
         .{ .input = "maybe\n", .default_value = true, .expected = false },
         .{ .input = "maybe\n", .default_value = false, .expected = false },
-        .{ .input = "", .default_value = true, .expected = true },
+        .{ .input = "", .default_value = true, .expected = false },
         .{ .input = "y\n", .default_value = false, .expected = true, .msg = "Sure" },
     };
     inline for (cases) |tc| {

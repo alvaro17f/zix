@@ -55,22 +55,31 @@ pub fn confirmAlloc(reader: *std.Io.Reader, writer: *std.Io.Writer, default_valu
 
     const line = reader.takeDelimiterExclusive('\n') catch |err| {
         if (err == error.EndOfStream) {
+            std.debug.print("\n[DEBUG confirm] EndOfStream, returning false\n", .{});
             return false;
         }
+        std.debug.print("\n[DEBUG confirm] error: {}\n", .{err});
         return err;
     };
+    std.debug.print("\n[DEBUG confirm] line read: '{s}' (len={})\n", .{ line, line.len });
     const response = std.ascii.allocLowerString(alloc, line) catch {
+        std.debug.print("\n[DEBUG confirm] allocLowerString failed, returning default={}\n", .{default_value});
         return default_value;
     };
     defer alloc.free(response);
+    std.debug.print("\n[DEBUG confirm] response: '{s}'\n", .{response});
 
     if (eql(u8, response, "y") or eql(u8, response, "yes")) {
+        std.debug.print("\n[DEBUG confirm] matched 'y'/'yes', returning true\n", .{});
         return true;
     } else if (eql(u8, response, "n") or eql(u8, response, "no")) {
+        std.debug.print("\n[DEBUG confirm] matched 'n'/'no', returning false\n", .{});
         return false;
     } else if (eql(u8, response, "\n") or eql(u8, response, "")) {
+        std.debug.print("\n[DEBUG confirm] empty response, returning default={}\n", .{default_value});
         return default_value;
     } else {
+        std.debug.print("\n[DEBUG confirm] unmatched response, returning false\n", .{});
         return false;
     }
 }

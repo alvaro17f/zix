@@ -37,7 +37,44 @@ pub fn run(io: std.Io, command: []const u8, opts: @import("../app/cli.zig").RunO
 }
 
 pub fn confirm(reader: *std.Io.Reader, writer: *std.Io.Writer, default_value: bool, msg: ?[]const u8) !bool {
-    return confirmAlloc(reader, writer, default_value, msg, allocator);
+    _ = reader;
+    return confirmStdin(writer, default_value, msg, allocator);
+}
+
+fn confirmStdin(writer: *std.Io.Writer, default_value: bool, msg: ?[]const u8, alloc: std.mem.Allocator) !bool {
+    const default_value_str = if (default_value == true)
+        std.fmt.comptimePrint("{s}(Y/n){s}", .{ style.Green, style.Reset })
+    else
+        std.fmt.comptimePrint("{s}(y/N){s}", .{ style.Red, style.Reset });
+
+    if (msg) |value| {
+        try fmt.printTo(writer, "\n\n{s}{s}{s} {s}: ", .{ style.Yellow, value, style.Reset, default_value_str });
+    } else {
+        try fmt.printTo(writer, "\n\n{s}Proceed?{s} {s}: ", .{ style.Yellow, style.Reset, default_value_str });
+    }
+    try writer.flush();
+
+    var buf: [256]u8 = undefined;
+    var i: usize = 0;
+    while (i < buf.len - 1) {
+        const n = std.posix.read(0, buf[i..i+1]) catch |err| {
+            if (err == error.WouldBlock) continue;
+            return err;
+        };
+        if (n == 0) return false;
+        if (buf[i] == '\n') {
+            const line = buf[0..i];
+            const response = std.ascii.allocLowerString(alloc, line) catch return default_value;
+            defer alloc.free(response);
+
+            if (eql(u8, response, "y") or eql(u8, response, "yes")) return true;
+            if (eql(u8, response, "n") or eql(u8, response, "no")) return false;
+            if (eql(u8, response, "") or line.len == 0) return default_value;
+            return false;
+        }
+        i += 1;
+    }
+    return false;
 }
 
 pub fn confirmAlloc(reader: *std.Io.Reader, writer: *std.Io.Writer, default_value: bool, msg: ?[]const u8, alloc: std.mem.Allocator) !bool {
@@ -55,31 +92,22 @@ pub fn confirmAlloc(reader: *std.Io.Reader, writer: *std.Io.Writer, default_valu
 
     const line = reader.takeDelimiterExclusive('\n') catch |err| {
         if (err == error.EndOfStream) {
-            std.debug.print("\n[DEBUG confirm] EndOfStream, returning false\n", .{});
             return false;
         }
-        std.debug.print("\n[DEBUG confirm] error: {}\n", .{err});
         return err;
     };
-    std.debug.print("\n[DEBUG confirm] line read: '{s}' (len={})\n", .{ line, line.len });
     const response = std.ascii.allocLowerString(alloc, line) catch {
-        std.debug.print("\n[DEBUG confirm] allocLowerString failed, returning default={}\n", .{default_value});
         return default_value;
     };
     defer alloc.free(response);
-    std.debug.print("\n[DEBUG confirm] response: '{s}'\n", .{response});
 
     if (eql(u8, response, "y") or eql(u8, response, "yes")) {
-        std.debug.print("\n[DEBUG confirm] matched 'y'/'yes', returning true\n", .{});
         return true;
     } else if (eql(u8, response, "n") or eql(u8, response, "no")) {
-        std.debug.print("\n[DEBUG confirm] matched 'n'/'no', returning false\n", .{});
         return false;
     } else if (eql(u8, response, "\n") or eql(u8, response, "")) {
-        std.debug.print("\n[DEBUG confirm] empty response, returning default={}\n", .{default_value});
         return default_value;
     } else {
-        std.debug.print("\n[DEBUG confirm] unmatched response, returning false\n", .{});
         return false;
     }
 }
@@ -131,7 +159,7 @@ test "confirm responses" {
         var wbuf: [512]u8 = undefined;
         var writer = std.Io.Writer.fixed(&wbuf);
         var reader = std.Io.Reader.fixed(tc.input);
-        const result = try confirm(&reader, &writer, tc.default_value, tc.msg);
+        const result = try confirmAlloc(&reader, &writer, tc.default_value, tc.msg, std.testing.allocator);
         try std.testing.expectEqual(tc.expected, result);
     }
 }

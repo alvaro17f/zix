@@ -42,7 +42,7 @@ pub fn cli(io: std.Io, writer: *std.Io.Writer, reader: *std.Io.Reader, config: C
 
             if (try deps.confirm(reader, writer, true, "Do you want to add these changes to the stage?")) {
                 _ = deps.run(io, try cmd.gitAdd(allocator, config.repo), .{}) catch |err| { try fmt.printTo(writer, "Failed to add changes to the stage: {}\n", .{err}); };
-                try fmt.printTo(writer, "{s}Changes added to git stage successfully{s}\n", .{ style.Green, style.Reset });
+                try fmt.printTo(writer, "\n{s}Changes added to git stage successfully{s}\n", .{ style.Green, style.Reset });
             }
         }
 

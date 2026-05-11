@@ -51,6 +51,7 @@ pub fn confirmAlloc(reader: *std.Io.Reader, writer: *std.Io.Writer, default_valu
     } else {
         try fmt.printTo(writer, "\n\n{s}Proceed?{s} {s}: ", .{ style.Yellow, style.Reset, default_value_str });
     }
+    try writer.flush();
 
     const line = reader.takeDelimiterExclusive('\n') catch |err| {
         if (err == error.EndOfStream) {

@@ -21,7 +21,7 @@ pub fn main(init: std.process.Init) !void {
         .run = process.run,
         .confirm = ui.confirm,
         .printTitle = ui.printTitle,
-        .configPrint = app.configPrint,
+        .configPrint = ui.configPrint,
     };
 
     try app.run(init.io, &stdout_writer.interface, args_list.items, deps, alloc);
@@ -29,6 +29,7 @@ pub fn main(init: std.process.Init) !void {
 
 test {
     _ = @import("app/init.zig");
+    _ = @import("app/config.zig");
     _ = @import("app/cli.zig");
     _ = @import("core/io.zig");
     _ = @import("core/commands.zig");

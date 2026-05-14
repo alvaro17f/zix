@@ -2,7 +2,7 @@ const std = @import("std");
 const io = @import("../core/io.zig");
 const cmd = @import("../core/commands.zig");
 const process = @import("../core/process.zig");
-const Config = @import("init.zig").Config;
+const Config = @import("config.zig").Config;
 
 pub const Deps = struct {
     run: *const fn (std.Io, []const u8, process.RunOpts) anyerror!i32,
@@ -14,49 +14,49 @@ pub const Deps = struct {
 pub fn cli(cli_io: std.Io, writer: *std.Io.Writer, config: Config, deps: Deps, alloc: std.mem.Allocator) !void {
     var arena = std.heap.ArenaAllocator.init(alloc);
     defer arena.deinit();
-    const allocator = arena.allocator();
+    const arena_alloc = arena.allocator();
 
     try deps.printTitle(writer, "ZIX Configuration", alloc);
     try deps.configPrint(writer, config);
 
     if (try deps.confirm(writer, true, null, alloc)) {
-        try pullRepo(cli_io, writer, allocator, config.repo, deps, alloc);
+        try pullRepo(cli_io, writer, arena_alloc, config.repo, deps, alloc);
 
         if (config.update) {
             try deps.printTitle(writer, "Nix Update", alloc);
-            _ = try runShell(cli_io, deps, try cmd.nixUpdate(allocator, config.repo), .{});
+            _ = try deps.run(cli_io, try cmd.nixUpdate(arena_alloc, config.repo), .{});
         }
 
-        try stageGitChanges(cli_io, writer, allocator, config.repo, deps, alloc);
+        try stageGitChanges(cli_io, writer, arena_alloc, config.repo, deps, alloc);
 
         try deps.printTitle(writer, "Nixos Rebuild", alloc);
-        _ = try runShell(cli_io, deps, try cmd.nixRebuild(allocator, config.repo, config.hostname), .{});
-        _ = try runShell(cli_io, deps, try cmd.nixKeep(allocator, config.keep), .{});
+        _ = try deps.run(cli_io, try cmd.nixRebuild(arena_alloc, config.repo, config.hostname), .{});
+        _ = try deps.run(cli_io, try cmd.nixKeep(arena_alloc, config.keep), .{});
 
         if (config.diff) {
             try deps.printTitle(writer, "Nix Diff", alloc);
-            _ = try runShell(cli_io, deps, cmd.nixDiff, .{});
+            _ = try deps.run(cli_io, cmd.nixDiff, .{});
         }
     }
 }
 
-fn pullRepo(cli_io: std.Io, writer: *std.Io.Writer, allocator: std.mem.Allocator, repo: []const u8, deps: Deps, alloc: std.mem.Allocator) !void {
+fn pullRepo(cli_io: std.Io, writer: *std.Io.Writer, arena: std.mem.Allocator, repo: []const u8, deps: Deps, alloc: std.mem.Allocator) !void {
     try deps.printTitle(writer, "Git Pull", alloc);
-    const status = try runShell(cli_io, deps, try cmd.gitPull(allocator, repo), .{});
+    const status = try deps.run(cli_io, try cmd.gitPull(arena, repo), .{});
     if (status != 0) {
         try io.printTo(writer, "{s}Failed to pull changes{s}\n", .{ io.Red, io.Reset });
         return error.GitPullFailed;
     }
 }
 
-fn stageGitChanges(cli_io: std.Io, writer: *std.Io.Writer, allocator: std.mem.Allocator, repo: []const u8, deps: Deps, alloc: std.mem.Allocator) !void {
-    if (try runShell(cli_io, deps, try cmd.gitDiff(allocator, repo), .{ .output = false }) != 1) return;
+fn stageGitChanges(cli_io: std.Io, writer: *std.Io.Writer, arena: std.mem.Allocator, repo: []const u8, deps: Deps, alloc: std.mem.Allocator) !void {
+    if (try deps.run(cli_io, try cmd.gitDiff(arena, repo), .{ .output = false }) != 1) return;
 
     try deps.printTitle(writer, "Git Changes", alloc);
-    _ = try runShell(cli_io, deps, try cmd.gitStatus(allocator, repo), .{});
+    _ = try deps.run(cli_io, try cmd.gitStatus(arena, repo), .{});
 
     if (try deps.confirm(writer, true, "Do you want to add these changes to the stage?", alloc)) {
-        _ = deps.run(cli_io, try cmd.gitAdd(allocator, repo), .{}) catch |err| {
+        _ = deps.run(cli_io, try cmd.gitAdd(arena, repo), .{}) catch |err| {
             try io.printTo(writer, "{s}Failed to add changes to the stage: {}{s}\n", .{ io.Red, err, io.Reset });
             return;
         };
@@ -66,9 +66,7 @@ fn stageGitChanges(cli_io: std.Io, writer: *std.Io.Writer, allocator: std.mem.Al
     }
 }
 
-fn runShell(cli_io: std.Io, deps: Deps, command: []const u8, opts: process.RunOpts) !i32 {
-    return deps.run(cli_io, command, opts);
-}
+// --- Test Mocks ---
 
 fn mockRun(_: std.Io, c: []const u8, _: process.RunOpts) anyerror!i32 {
     if (std.mem.startsWith(u8, c, "git -C")) {
@@ -79,12 +77,14 @@ fn mockRun(_: std.Io, c: []const u8, _: process.RunOpts) anyerror!i32 {
 var confirm_call_count: usize = 0;
 fn mockConfirmCounting(_: *std.Io.Writer, _: bool, _: ?[]const u8, _: std.mem.Allocator) anyerror!bool {
     confirm_call_count += 1;
-    return confirm_call_count != 2; // false on second call
+    return confirm_call_count != 2;
 }
 fn mockConfirmTrue(_: *std.Io.Writer, _: bool, _: ?[]const u8, _: std.mem.Allocator) anyerror!bool { return true; }
 fn mockConfirmFalse(_: *std.Io.Writer, _: bool, _: ?[]const u8, _: std.mem.Allocator) anyerror!bool { return false; }
 fn mockPrintTitle(_: *std.Io.Writer, _: []const u8, _: std.mem.Allocator) anyerror!void {}
 fn mockConfigPrint(_: *std.Io.Writer, _: Config) anyerror!void {}
+
+// --- Tests ---
 
 test "cli branches" {
     var buf: [4096]u8 = undefined;

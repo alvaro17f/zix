@@ -56,8 +56,9 @@ fn stageGitChanges(cli_io: std.Io, writer: *std.Io.Writer, allocator: std.mem.Al
     _ = try runShell(cli_io, deps, try cmd.gitStatus(allocator, repo), .{});
 
     if (try deps.confirm(writer, true, "Do you want to add these changes to the stage?", alloc)) {
-        _ = runShell(cli_io, deps, try cmd.gitAdd(allocator, repo), .{}) catch |err| {
-            try io.printTo(writer, "Failed to add changes to the stage: {}\n", .{err});
+        _ = deps.run(cli_io, try cmd.gitAdd(allocator, repo), .{}) catch |err| {
+            try io.printTo(writer, "{s}Failed to add changes to the stage: {}{s}\n", .{ io.Red, err, io.Reset });
+            return;
         };
         try io.printTo(writer, "{s}Changes added to git stage successfully{s}\n", .{ io.Green, io.Reset });
     } else {
@@ -74,6 +75,11 @@ fn mockRun(_: std.Io, c: []const u8, _: process.RunOpts) anyerror!i32 {
         if (std.mem.indexOf(u8, c, "diff --exit-code") != null) return 1;
     }
     return 0;
+}
+var confirm_call_count: usize = 0;
+fn mockConfirmCounting(_: *std.Io.Writer, _: bool, _: ?[]const u8, _: std.mem.Allocator) anyerror!bool {
+    confirm_call_count += 1;
+    return confirm_call_count != 2; // false on second call
 }
 fn mockConfirmTrue(_: *std.Io.Writer, _: bool, _: ?[]const u8, _: std.mem.Allocator) anyerror!bool { return true; }
 fn mockConfirmFalse(_: *std.Io.Writer, _: bool, _: ?[]const u8, _: std.mem.Allocator) anyerror!bool { return false; }
@@ -146,4 +152,25 @@ test "cli git add failure" {
     };
 
     try cli(cli_io, &writer, Config{ .repo = "r", .hostname = "h", .keep = 1, .update = false, .diff = true }, add_fail_deps, std.testing.allocator);
+    const out = std.mem.sliceTo(&buf, 0);
+    try std.testing.expect(std.mem.indexOf(u8, out, "Failed to add changes") != null);
+    try std.testing.expect(std.mem.indexOf(u8, out, "successfully") == null);
+}
+
+test "cli decline add changes" {
+    var buf: [4096]u8 = undefined;
+    var writer = std.Io.Writer.fixed(&buf);
+    const cli_io = std.testing.io;
+
+    confirm_call_count = 0;
+    const decline_deps = Deps{
+        .run = mockRun,
+        .confirm = mockConfirmCounting,
+        .printTitle = mockPrintTitle,
+        .configPrint = mockConfigPrint,
+    };
+    try cli(cli_io, &writer, Config{ .repo = "r", .hostname = "h", .keep = 1, .update = false, .diff = true }, decline_deps, std.testing.allocator);
+    const out = std.mem.sliceTo(&buf, 0);
+    try std.testing.expect(std.mem.indexOf(u8, out, "not added") != null);
+    try std.testing.expect(std.mem.indexOf(u8, out, "successfully") == null);
 }

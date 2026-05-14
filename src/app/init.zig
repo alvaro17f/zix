@@ -17,7 +17,9 @@ pub fn run(cli_io: std.Io, writer: *std.Io.Writer, args: []const []const u8, dep
         return try cli(cli_io, writer, config, deps, alloc);
     }
 
-    for (args[1..], 0..) |arg, idx| {
+    var i: usize = 1;
+    while (i < args.len) : (i += 1) {
+        const arg = args[i];
         if (arg[0] == '-') {
             for (arg[1..]) |flag| {
                 switch (flag) {
@@ -26,13 +28,14 @@ pub fn run(cli_io: std.Io, writer: *std.Io.Writer, args: []const []const u8, dep
                     'd' => config.diff = true,
                     'u' => config.update = true,
                     'r', 'n', 'k' => {
-                        if (idx + 2 >= args.len) {
+                        i += 1;
+                        if (i >= args.len) {
                             return try io.printTo(writer, "{s}Error: \"-{c}\" flag requires an argument\n{s}", .{ io.Red, flag, io.Reset });
                         }
-                        if (flag == 'r') config.repo = args[idx + 2];
-                        if (flag == 'n') config.hostname = args[idx + 2];
+                        if (flag == 'r') config.repo = args[i];
+                        if (flag == 'n') config.hostname = args[i];
                         if (flag == 'k') {
-                            const number = std.fmt.parseInt(u8, args[idx + 2], 10) catch {
+                            const number = std.fmt.parseInt(u8, args[i], 10) catch {
                                 return try io.printTo(writer, "{s}Error: Value of \"-k\" flag is not numeric.\n{s}", .{ io.Red, io.Reset });
                             };
                             config.keep = number;
@@ -41,12 +44,10 @@ pub fn run(cli_io: std.Io, writer: *std.Io.Writer, args: []const []const u8, dep
                     else => return try io.printTo(writer, "{s}Error: Unknown flag \"-{c}\"\n{s}", .{ io.Red, flag, io.Reset }),
                 }
             }
-        } else if (idx == 0) {
-            for (args[1..]) |argument| {
-                if (eql(u8, argument, "help")) { return try ui.printHelp(writer); }
-                if (eql(u8, argument, "version")) { return try ui.printVersion(writer, VERSION); }
-                return try io.printTo(writer, "{s}Error: Unknown argument \"{s}\"\n{s}", .{ io.Red, argument, io.Reset });
-            }
+        } else {
+            if (eql(u8, arg, "help")) { return try ui.printHelp(writer); }
+            if (eql(u8, arg, "version")) { return try ui.printVersion(writer, VERSION); }
+            return try io.printTo(writer, "{s}Error: Unknown argument \"{s}\"\n{s}", .{ io.Red, arg, io.Reset });
         }
     }
 
@@ -81,6 +82,8 @@ test "run flag branches" {
         .{ .args = &.{ "zix", "-x" }, .expect_contains = "Unknown flag" },
         .{ .args = &.{ "zix", "-d" }, .expect_contains = null },
         .{ .args = &.{ "zix", "-u" }, .expect_contains = null },
+        .{ .args = &.{ "zix", "-d", "help" }, .expect_contains = "ZIX" },
+        .{ .args = &.{ "zix", "-d", "unknown" }, .expect_contains = "Unknown argument" },
     };
 
     const mock_deps = cli_module.Deps{
@@ -91,7 +94,7 @@ test "run flag branches" {
     };
 
     for (cases) |tc| {
-        var buf: [2048]u8 = undefined;
+        var buf = [_]u8{0} ** 2048;
         var writer = std.Io.Writer.fixed(&buf);
         run(test_io, &writer, tc.args, mock_deps, std.testing.allocator) catch continue;
         if (tc.expect_contains) |needle| {

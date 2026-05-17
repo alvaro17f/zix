@@ -79,8 +79,12 @@ fn mockConfirmCounting(_: *std.Io.Writer, _: bool, _: ?[]const u8, _: std.mem.Al
     confirm_call_count += 1;
     return confirm_call_count != 2;
 }
-fn mockConfirmTrue(_: *std.Io.Writer, _: bool, _: ?[]const u8, _: std.mem.Allocator) anyerror!bool { return true; }
-fn mockConfirmFalse(_: *std.Io.Writer, _: bool, _: ?[]const u8, _: std.mem.Allocator) anyerror!bool { return false; }
+fn mockConfirmTrue(_: *std.Io.Writer, _: bool, _: ?[]const u8, _: std.mem.Allocator) anyerror!bool {
+    return true;
+}
+fn mockConfirmFalse(_: *std.Io.Writer, _: bool, _: ?[]const u8, _: std.mem.Allocator) anyerror!bool {
+    return false;
+}
 fn mockPrintTitle(_: *std.Io.Writer, _: []const u8, _: std.mem.Allocator) anyerror!void {}
 fn mockConfigPrint(_: *std.Io.Writer, _: Config) anyerror!void {}
 
@@ -110,7 +114,9 @@ test "cli branches" {
     // git pull fails
     const fail_deps = Deps{
         .run = struct {
-            fn f(_: std.Io, _: []const u8, _: process.RunOpts) anyerror!i32 { return 1; }
+            fn f(_: std.Io, _: []const u8, _: process.RunOpts) anyerror!i32 {
+                return 1;
+            }
         }.f,
         .confirm = mockConfirmTrue,
         .printTitle = mockPrintTitle,
@@ -124,7 +130,9 @@ test "cli branches" {
     // no git changes (diff returns 0)
     const no_changes_deps = Deps{
         .run = struct {
-            fn f(_: std.Io, _: []const u8, _: process.RunOpts) anyerror!i32 { return 0; }
+            fn f(_: std.Io, _: []const u8, _: process.RunOpts) anyerror!i32 {
+                return 0;
+            }
         }.f,
         .confirm = mockConfirmTrue,
         .printTitle = mockPrintTitle,

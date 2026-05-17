@@ -23,8 +23,12 @@ pub fn run(cli_io: std.Io, writer: *std.Io.Writer, args: []const []const u8, dep
         if (arg[0] == '-') {
             for (arg[1..]) |flag| {
                 switch (flag) {
-                    'h' => { return try ui.printHelp(writer); },
-                    'v' => { return try ui.printVersion(writer, VERSION); },
+                    'h' => {
+                        return try ui.printHelp(writer);
+                    },
+                    'v' => {
+                        return try ui.printVersion(writer, VERSION);
+                    },
                     'd' => config.diff = true,
                     'u' => config.update = true,
                     'r', 'n', 'k' => {
@@ -45,8 +49,12 @@ pub fn run(cli_io: std.Io, writer: *std.Io.Writer, args: []const []const u8, dep
                 }
             }
         } else {
-            if (eql(u8, arg, "help")) { return try ui.printHelp(writer); }
-            if (eql(u8, arg, "version")) { return try ui.printVersion(writer, VERSION); }
+            if (eql(u8, arg, "help")) {
+                return try ui.printHelp(writer);
+            }
+            if (eql(u8, arg, "version")) {
+                return try ui.printVersion(writer, VERSION);
+            }
             return try io.printTo(writer, "{s}Error: Unknown argument \"{s}\"\n{s}", .{ io.Red, arg, io.Reset });
         }
     }
@@ -58,8 +66,12 @@ pub fn run(cli_io: std.Io, writer: *std.Io.Writer, args: []const []const u8, dep
     return try cli(cli_io, writer, config, deps, alloc);
 }
 
-fn mockRun(_: std.Io, _: []const u8, _: process.RunOpts) anyerror!i32 { return 0; }
-noinline fn mockConfirm(_: *std.Io.Writer, _: bool, _: ?[]const u8, _: std.mem.Allocator) anyerror!bool { return true; }
+fn mockRun(_: std.Io, _: []const u8, _: process.RunOpts) anyerror!i32 {
+    return 0;
+}
+noinline fn mockConfirm(_: *std.Io.Writer, _: bool, _: ?[]const u8, _: std.mem.Allocator) anyerror!bool {
+    return true;
+}
 noinline fn mockPrintTitle(_: *std.Io.Writer, _: []const u8, _: std.mem.Allocator) anyerror!void {}
 noinline fn mockConfigPrint(_: *std.Io.Writer, _: Config) anyerror!void {}
 

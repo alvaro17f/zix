@@ -73,7 +73,7 @@ pub fn confirm(writer: *std.Io.Writer, default_value: bool, msg: ?[]const u8, al
     var buf: [256]u8 = undefined;
     var i: usize = 0;
     while (i < buf.len - 1) {
-        const n = std.posix.read(0, buf[i..i+1]) catch |err| {
+        const n = std.posix.read(0, buf[i .. i + 1]) catch |err| {
             if (err == error.WouldBlock) continue;
             return err;
         };

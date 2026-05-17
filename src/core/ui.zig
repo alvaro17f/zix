@@ -42,6 +42,8 @@ pub fn printHelp(writer: *std.Io.Writer) !void {
 }
 
 pub fn printVersion(writer: *std.Io.Writer, version: []const u8) !void {
+    // Assert preconditions: version must not be empty.
+    std.debug.assert(version.len > 0);
     try io.printTo(
         writer,
         "{s}\nZIX version: {s}{s}\n{s}",
@@ -57,6 +59,8 @@ fn printConfigLine(
     value: anytype,
     options: struct { new_line: bool = true },
 ) !void {
+    // Assert preconditions: label must not be empty.
+    std.debug.assert(label.len > 0);
     const value_fmt = comptime if (@TypeOf(value) == []const u8) "{" ++ "s}" else "{" ++ "}";
     try io.printTo(writer, "{s}◉ {s}{s}{s} = {s}" ++ value_fmt ++ "{s}{s}", .{
         io.Cyan,
@@ -71,6 +75,8 @@ fn printConfigLine(
 }
 
 pub fn configPrint(writer: *std.Io.Writer, config: @import("../app/config.zig").Config) !void {
+    // Assert preconditions: config must have valid fields.
+    std.debug.assert(config.repo.len > 0);
     const fields = @typeInfo(@TypeOf(config)).@"struct".fields;
     inline for (fields, 0..) |field, i| {
         const is_last = i == fields.len - 1;
@@ -87,6 +93,9 @@ pub fn confirm(
     msg: ?[]const u8,
     allocator: std.mem.Allocator,
 ) !bool {
+    // If msg is provided, it must not be empty.
+    if (msg) |value| std.debug.assert(value.len > 0);
+
     try writeConfirmPrompt(writer, default_value, msg);
 
     var buf: [256]u8 = undefined;
@@ -109,7 +118,14 @@ pub fn confirm(
     return false;
 }
 
-fn writeConfirmPrompt(writer: *std.Io.Writer, default_value: bool, msg: ?[]const u8) !void {
+fn writeConfirmPrompt(
+    writer: *std.Io.Writer,
+    default_value: bool,
+    msg: ?[]const u8,
+) !void {
+    // If msg is provided, it must not be empty.
+    if (msg) |value| std.debug.assert(value.len > 0);
+
     const hint = if (default_value)
         std.fmt.comptimePrint("{s}(Y/n){s}", .{ io.Green, io.Reset })
     else
@@ -122,12 +138,21 @@ fn writeConfirmPrompt(writer: *std.Io.Writer, default_value: bool, msg: ?[]const
     try writer.flush();
 }
 
-fn parseConfirmResponse(line: []const u8, default_value: bool, allocator: std.mem.Allocator) !bool {
+fn parseConfirmResponse(
+    line: []const u8,
+    default_value: bool,
+    allocator: std.mem.Allocator,
+) !bool {
     const response = std.ascii.allocLowerString(allocator, line) catch return default_value;
     defer allocator.free(response);
+
+    // Positive responses.
     if (equal(u8, response, "y") or equal(u8, response, "yes")) return true;
+    // Negative responses.
     if (equal(u8, response, "n") or equal(u8, response, "no")) return false;
+    // Empty input uses default.
     if (equal(u8, response, "") or line.len == 0) return default_value;
+    // Unknown input defaults to false.
     return false;
 }
 
@@ -138,6 +163,9 @@ pub fn confirmAlloc(
     msg: ?[]const u8,
     allocator: std.mem.Allocator,
 ) !bool {
+    // If msg is provided, it must not be empty.
+    if (msg) |value| std.debug.assert(value.len > 0);
+
     try writeConfirmPrompt(writer, default_value, msg);
 
     const line = reader.takeDelimiterExclusive('\n') catch |err| {

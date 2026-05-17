@@ -3,6 +3,9 @@ const std = @import("std");
 pub const RunOpts = struct { output: bool = true };
 
 pub fn run(io: std.Io, command: []const u8, opts: RunOpts) !i32 {
+    // Assert preconditions: command must not be empty.
+    std.debug.assert(command.len > 0);
+
     const shellCommand = [_][]const u8{ "sh", "-c", command };
     var child = try std.process.spawn(io, .{
         .argv = &shellCommand,

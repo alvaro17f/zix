@@ -18,6 +18,11 @@ pub fn cli(
     deps: Deps,
     allocator: std.mem.Allocator,
 ) !void {
+    // Assert preconditions: repo and hostname must be valid strings.
+    std.debug.assert(config.repo.len > 0);
+    std.debug.assert(config.hostname.len > 0);
+    std.debug.assert(config.keep > 0);
+
     // Arena for transient command strings freed on scope exit.
     var arena = std.heap.ArenaAllocator.init(allocator);
     defer arena.deinit();
@@ -59,6 +64,9 @@ fn pullRepo(
     deps: Deps,
     allocator: std.mem.Allocator,
 ) !void {
+    // Assert preconditions: repo must be a valid path.
+    std.debug.assert(repo.len > 0);
+
     try deps.printTitle(writer, "Git Pull", allocator);
     const status = try deps.run(cli_io, try cmd.gitPull(arena_allocator, repo), .{});
     if (status != 0) {
@@ -75,6 +83,9 @@ fn stageGitChanges(
     deps: Deps,
     allocator: std.mem.Allocator,
 ) !void {
+    // Assert preconditions: repo must be a valid path.
+    std.debug.assert(repo.len > 0);
+
     // diff --exit-code returns 1 when there are unstaged changes.
     const has_changes = try deps.run(
         cli_io,

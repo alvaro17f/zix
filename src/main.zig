@@ -5,11 +5,16 @@ const ui = @import("core/ui.zig");
 const process = @import("core/process.zig");
 
 pub fn main(init: std.process.Init) !void {
+    // Assert preconditions: GPA must be valid.
+    std.debug.assert(init.gpa.vtable != null);
+
     var args_list: std.ArrayList([]const u8) = .empty;
     defer args_list.deinit(init.gpa);
     for (init.minimal.args.vector) |arg_z| {
         try args_list.append(init.gpa, std.mem.sliceTo(arg_z, 0));
     }
+    // Must have at least the program name.
+    std.debug.assert(args_list.items.len >= 1);
 
     var stdout_buf: [4096]u8 = undefined;
     const stdout_file = std.Io.File.stdout();

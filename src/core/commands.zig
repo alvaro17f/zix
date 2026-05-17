@@ -1,22 +1,28 @@
 const std = @import("std");
 
 pub fn gitPull(allocator: std.mem.Allocator, repo: []const u8) ![]const u8 {
+    // Assert preconditions: repo must be a valid path.
+    std.debug.assert(repo.len > 0);
     return std.fmt.allocPrint(allocator, "git -C {s} pull", .{repo});
 }
 
 pub fn gitDiff(allocator: std.mem.Allocator, repo: []const u8) ![]const u8 {
+    std.debug.assert(repo.len > 0);
     return std.fmt.allocPrint(allocator, "git -C {s} diff --exit-code", .{repo});
 }
 
 pub fn gitStatus(allocator: std.mem.Allocator, repo: []const u8) ![]const u8 {
+    std.debug.assert(repo.len > 0);
     return std.fmt.allocPrint(allocator, "git -C {s} status --porcelain", .{repo});
 }
 
 pub fn gitAdd(allocator: std.mem.Allocator, repo: []const u8) ![]const u8 {
+    std.debug.assert(repo.len > 0);
     return std.fmt.allocPrint(allocator, "git -C {s} add .", .{repo});
 }
 
 pub fn nixUpdate(allocator: std.mem.Allocator, repo: []const u8) ![]const u8 {
+    std.debug.assert(repo.len > 0);
     return std.fmt.allocPrint(allocator, "nix flake update --flake {s}", .{repo});
 }
 
@@ -25,6 +31,9 @@ pub fn nixRebuild(
     repo: []const u8,
     hostname: []const u8,
 ) ![]const u8 {
+    // Assert preconditions: repo and hostname must be valid.
+    std.debug.assert(repo.len > 0);
+    std.debug.assert(hostname.len > 0);
     return std.fmt.allocPrint(
         allocator,
         "sudo nixos-rebuild switch --flake {s}#{s} --show-trace",
@@ -36,6 +45,8 @@ pub fn nixKeep(
     allocator: std.mem.Allocator,
     generations_to_keep: u8,
 ) ![]const u8 {
+    // generations_to_keep must be > 0 to be meaningful.
+    std.debug.assert(generations_to_keep > 0);
     return std.fmt.allocPrint(
         allocator,
         "sudo nix-env --profile /nix/var/nix/profiles/system" ++ " --delete-generations +{d}",

@@ -2,7 +2,14 @@ const std = @import("std");
 
 // --- Formatting ---
 
-pub fn printTo(writer: *std.Io.Writer, comptime format: []const u8, args: anytype) !void {
+pub fn printTo(
+    writer: *std.Io.Writer,
+    comptime format: []const u8,
+    args: anytype,
+) !void {
+    // Assert preconditions: format must not be empty.
+    std.debug.assert(format.len > 0);
+
     try writer.print(format, args);
     try writer.flush();
 }

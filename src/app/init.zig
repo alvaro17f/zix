@@ -16,6 +16,10 @@ pub fn run(
     deps: cli_module.Deps,
     allocator: std.mem.Allocator,
 ) !void {
+    // Assert preconditions: writer must be valid, args must not be empty.
+    std.debug.assert(writer.context != null);
+    std.debug.assert(args.len >= 1);
+
     // Hostname buffer must outlive config to avoid dangling pointer.
     var hostname_buf: [std.posix.HOST_NAME_MAX]u8 = undefined;
     var config = Config.defaults(&hostname_buf);
@@ -28,6 +32,8 @@ pub fn run(
     var arg_index: u32 = 1;
     while (arg_index < args.len) : (arg_index += 1) {
         const arg = args[arg_index];
+        // Each arg must be non-empty.
+        std.debug.assert(arg.len > 0);
         if (arg[0] == '-') {
             for (arg[1..]) |flag| {
                 switch (flag) {

@@ -26,3 +26,7 @@
 ## Questions?
 
 Ask before uncertain decisions.
+
+## Style Guide
+
+See `TIGER_STYLE.md` for TigerBeetle coding style guidelines.

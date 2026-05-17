@@ -120,9 +120,9 @@ noinline fn mockConfigPrint(_: *std.Io.Writer, _: Config) anyerror!void {}
 test "run flag branches" {
     const test_io = std.testing.io;
 
-    var arena_instance = std.heap.ArenaAllocator.init(std.testing.allocator);
-    defer arena_instance.deinit();
-    var static_allocator = StaticAllocator.init(arena_instance.allocator());
+    var memory: [4096]u8 = undefined;
+    var fba = std.heap.FixedBufferAllocator.init(&memory);
+    var static_allocator = StaticAllocator.init(fba.allocator());
 
     const TestCase = struct {
         args: []const []const u8,
@@ -168,9 +168,9 @@ test "run reaches cli" {
     var buf: [256]u8 = undefined;
     var writer = std.Io.Writer.fixed(&buf);
 
-    var arena_instance = std.heap.ArenaAllocator.init(std.testing.allocator);
-    defer arena_instance.deinit();
-    var static_allocator = StaticAllocator.init(arena_instance.allocator());
+    var memory: [4096]u8 = undefined;
+    var fba = std.heap.FixedBufferAllocator.init(&memory);
+    var static_allocator = StaticAllocator.init(fba.allocator());
 
     const mock_deps = cli_module.Deps{
         .run = mockRun,
@@ -187,9 +187,9 @@ test "run rejects invalid config via flags" {
     var buf: [256]u8 = undefined;
     var writer = std.Io.Writer.fixed(&buf);
 
-    var arena_instance = std.heap.ArenaAllocator.init(std.testing.allocator);
-    defer arena_instance.deinit();
-    var static_allocator = StaticAllocator.init(arena_instance.allocator());
+    var memory: [4096]u8 = undefined;
+    var fba = std.heap.FixedBufferAllocator.init(&memory);
+    var static_allocator = StaticAllocator.init(fba.allocator());
 
     const mock_deps = cli_module.Deps{
         .run = mockRun,

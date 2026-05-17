@@ -167,9 +167,9 @@ fn testConfig(update: bool, diff: bool) Config {
 }
 
 test "cli branches" {
-    var arena_instance = std.heap.ArenaAllocator.init(std.testing.allocator);
-    defer arena_instance.deinit();
-    const allocator = arena_instance.allocator();
+    var memory: [4096]u8 = undefined;
+    var fba = std.heap.FixedBufferAllocator.init(&memory);
+    const allocator = fba.allocator();
 
     var buf: [4096]u8 = undefined;
     var writer = std.Io.Writer.fixed(&buf);
@@ -225,9 +225,9 @@ test "cli branches" {
 }
 
 test "cli git add failure" {
-    var arena_instance = std.heap.ArenaAllocator.init(std.testing.allocator);
-    defer arena_instance.deinit();
-    const allocator = arena_instance.allocator();
+    var memory: [4096]u8 = undefined;
+    var fba = std.heap.FixedBufferAllocator.init(&memory);
+    const allocator = fba.allocator();
 
     var buf: [4096]u8 = undefined;
     var writer = std.Io.Writer.fixed(&buf);
@@ -253,9 +253,9 @@ test "cli git add failure" {
 }
 
 test "cli decline add changes" {
-    var arena_instance = std.heap.ArenaAllocator.init(std.testing.allocator);
-    defer arena_instance.deinit();
-    const allocator = arena_instance.allocator();
+    var memory: [4096]u8 = undefined;
+    var fba = std.heap.FixedBufferAllocator.init(&memory);
+    const allocator = fba.allocator();
 
     var buf: [4096]u8 = undefined;
     var writer = std.Io.Writer.fixed(&buf);

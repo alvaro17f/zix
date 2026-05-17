@@ -5,18 +5,17 @@ const ui = @import("core/ui.zig");
 const process = @import("core/process.zig");
 
 pub fn main(init: std.process.Init) !void {
-    const alloc = init.gpa;
-
     var args_list: std.ArrayList([]const u8) = .empty;
-    defer args_list.deinit(alloc);
+    defer args_list.deinit(init.gpa);
     for (init.minimal.args.vector) |arg_z| {
-        try args_list.append(alloc, std.mem.sliceTo(arg_z, 0));
+        try args_list.append(init.gpa, std.mem.sliceTo(arg_z, 0));
     }
 
     var stdout_buf: [4096]u8 = undefined;
     const stdout_file = std.Io.File.stdout();
     var stdout_writer = stdout_file.writer(init.io, &stdout_buf);
 
+    // Dependency injection: all side effects go through Deps for testability.
     const deps = cli.Deps{
         .run = process.run,
         .confirm = ui.confirm,
@@ -24,7 +23,7 @@ pub fn main(init: std.process.Init) !void {
         .configPrint = ui.configPrint,
     };
 
-    try app.run(init.io, &stdout_writer.interface, args_list.items, deps, alloc);
+    try app.run(init.io, &stdout_writer.interface, args_list.items, deps, init.gpa);
 }
 
 test {

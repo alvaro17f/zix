@@ -3,23 +3,25 @@ const io = @import("../core/io.zig");
 const ui = @import("../core/ui.zig");
 const cli_module = @import("./cli.zig");
 const cli = cli_module.cli;
-const eql = std.mem.eql;
+const equal = std.mem.equal;
 const process = @import("../core/process.zig");
-const config_mod = @import("config.zig");
-pub const Config = config_mod.Config;
+const config_module = @import("config.zig");
+pub const Config = config_module.Config;
 const VERSION = @import("zon").version;
 
-pub fn run(cli_io: std.Io, writer: *std.Io.Writer, args: []const []const u8, deps: cli_module.Deps, alloc: std.mem.Allocator) !void {
+pub fn run(cli_io: std.Io, writer: *std.Io.Writer, args: []const []const u8, deps: cli_module.Deps, allocator: std.mem.Allocator) !void {
+    // Hostname buffer must outlive config to avoid dangling pointer.
     var hostname_buf: [std.posix.HOST_NAME_MAX]u8 = undefined;
     var config = Config.defaults(&hostname_buf);
 
     if (args.len <= 1) {
-        return try cli(cli_io, writer, config, deps, alloc);
+        return try cli(cli_io, writer, config, deps, allocator);
     }
 
-    var i: usize = 1;
-    while (i < args.len) : (i += 1) {
-        const arg = args[i];
+    // Parse flags: each '-' introduces one or more single-char flags.
+    var arg_index: u32 = 1;
+    while (arg_index < args.len) : (arg_index += 1) {
+        const arg = args[arg_index];
         if (arg[0] == '-') {
             for (arg[1..]) |flag| {
                 switch (flag) {
@@ -32,14 +34,15 @@ pub fn run(cli_io: std.Io, writer: *std.Io.Writer, args: []const []const u8, dep
                     'd' => config.diff = true,
                     'u' => config.update = true,
                     'r', 'n', 'k' => {
-                        i += 1;
-                        if (i >= args.len) {
+                        // These flags consume the next argument as their value.
+                        arg_index += 1;
+                        if (arg_index >= args.len) {
                             return try io.printTo(writer, "{s}Error: \"-{c}\" flag requires an argument\n{s}", .{ io.Red, flag, io.Reset });
                         }
-                        if (flag == 'r') config.repo = args[i];
-                        if (flag == 'n') config.hostname = args[i];
+                        if (flag == 'r') config.repo = args[arg_index];
+                        if (flag == 'n') config.hostname = args[arg_index];
                         if (flag == 'k') {
-                            const number = std.fmt.parseInt(u8, args[i], 10) catch {
+                            const number = std.fmt.parseInt(u8, args[arg_index], 10) catch {
                                 return try io.printTo(writer, "{s}Error: Value of \"-k\" flag is not numeric.\n{s}", .{ io.Red, io.Reset });
                             };
                             config.keep = number;
@@ -49,21 +52,22 @@ pub fn run(cli_io: std.Io, writer: *std.Io.Writer, args: []const []const u8, dep
                 }
             }
         } else {
-            if (eql(u8, arg, "help")) {
+            if (equal(u8, arg, "help")) {
                 return try ui.printHelp(writer);
             }
-            if (eql(u8, arg, "version")) {
+            if (equal(u8, arg, "version")) {
                 return try ui.printVersion(writer, VERSION);
             }
             return try io.printTo(writer, "{s}Error: Unknown argument \"{s}\"\n{s}", .{ io.Red, arg, io.Reset });
         }
     }
 
-    if (config.validate()) |err_msg| {
-        return try io.printTo(writer, "{s}Error: {s}{s}\n", .{ io.Red, err_msg, io.Reset });
+    // Validate after all flags are parsed so partial configs get caught.
+    if (config.validate()) |error_message| {
+        return try io.printTo(writer, "{s}Error: {s}{s}\n", .{ io.Red, error_message, io.Reset });
     }
 
-    return try cli(cli_io, writer, config, deps, alloc);
+    return try cli(cli_io, writer, config, deps, allocator);
 }
 
 fn mockRun(_: std.Io, _: []const u8, _: process.RunOpts) anyerror!i32 {

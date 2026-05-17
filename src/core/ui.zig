@@ -1,15 +1,16 @@
 const std = @import("std");
 const io = @import("io.zig");
-const eql = std.mem.eql;
+const equal = std.mem.equal;
 
 // --- Title ---
 
-pub fn printTitle(writer: *std.Io.Writer, text: []const u8, alloc: std.mem.Allocator) !void {
-    const border = alloc.alloc(u8, text.len + 4) catch |err| {
+pub fn printTitle(writer: *std.Io.Writer, text: []const u8, allocator: std.mem.Allocator) !void {
+    // Allocate border string sized to text width plus padding.
+    const border = allocator.alloc(u8, text.len + 4) catch |err| {
         std.log.err("Failed to allocate memory: {}", .{err});
         return err;
     };
-    defer alloc.free(border);
+    defer allocator.free(border);
     for (border) |*c| {
         c.* = '*';
     }
@@ -67,19 +68,19 @@ pub fn configPrint(writer: *std.Io.Writer, config: @import("../app/config.zig").
 
 // --- Confirm ---
 
-pub fn confirm(writer: *std.Io.Writer, default_value: bool, msg: ?[]const u8, alloc: std.mem.Allocator) !bool {
+pub fn confirm(writer: *std.Io.Writer, default_value: bool, msg: ?[]const u8, allocator: std.mem.Allocator) !bool {
     try writeConfirmPrompt(writer, default_value, msg);
 
     var buf: [256]u8 = undefined;
-    var i: usize = 0;
-    while (i < buf.len - 1) {
-        const n = std.posix.read(0, buf[i .. i + 1]) catch |err| {
+    var byte_index: u32 = 0;
+    while (byte_index < buf.len - 1) {
+        const bytes_read = std.posix.read(0, buf[byte_index .. byte_index + 1]) catch |err| {
             if (err == error.WouldBlock) continue;
             return err;
         };
-        if (n == 0) return false;
-        if (buf[i] == '\n') return parseConfirmResponse(buf[0..i], default_value, alloc);
-        i += 1;
+        if (bytes_read == 0) return false;
+        if (buf[byte_index] == '\n') return parseConfirmResponse(buf[0..byte_index], default_value, allocator);
+        byte_index += 1;
     }
     return false;
 }
@@ -94,23 +95,23 @@ fn writeConfirmPrompt(writer: *std.Io.Writer, default_value: bool, msg: ?[]const
     try writer.flush();
 }
 
-fn parseConfirmResponse(line: []const u8, default_value: bool, alloc: std.mem.Allocator) !bool {
-    const response = std.ascii.allocLowerString(alloc, line) catch return default_value;
-    defer alloc.free(response);
-    if (eql(u8, response, "y") or eql(u8, response, "yes")) return true;
-    if (eql(u8, response, "n") or eql(u8, response, "no")) return false;
-    if (eql(u8, response, "") or line.len == 0) return default_value;
+fn parseConfirmResponse(line: []const u8, default_value: bool, allocator: std.mem.Allocator) !bool {
+    const response = std.ascii.allocLowerString(allocator, line) catch return default_value;
+    defer allocator.free(response);
+    if (equal(u8, response, "y") or equal(u8, response, "yes")) return true;
+    if (equal(u8, response, "n") or equal(u8, response, "no")) return false;
+    if (equal(u8, response, "") or line.len == 0) return default_value;
     return false;
 }
 
-pub fn confirmAlloc(reader: *std.Io.Reader, writer: *std.Io.Writer, default_value: bool, msg: ?[]const u8, alloc: std.mem.Allocator) !bool {
+pub fn confirmAlloc(reader: *std.Io.Reader, writer: *std.Io.Writer, default_value: bool, msg: ?[]const u8, allocator: std.mem.Allocator) !bool {
     try writeConfirmPrompt(writer, default_value, msg);
 
     const line = reader.takeDelimiterExclusive('\n') catch |err| {
         if (err == error.EndOfStream) return false;
         return err;
     };
-    return parseConfirmResponse(line, default_value, alloc);
+    return parseConfirmResponse(line, default_value, allocator);
 }
 
 // --- Tests ---
@@ -126,9 +127,9 @@ test "printTitle border format" {
 test "printTitle alloc failure" {
     var buf: [256]u8 = undefined;
     var writer = std.Io.Writer.fixed(&buf);
-    var fa = std.testing.FailingAllocator.init(std.testing.allocator, .{ .fail_index = 0 });
-    const fa_alloc = fa.allocator();
-    try std.testing.expectError(error.OutOfMemory, printTitle(&writer, "ZIX", fa_alloc));
+    var failing_allocator = std.testing.FailingAllocator.init(std.testing.allocator, .{ .fail_index = 0 });
+    const failing_alloc = failing_allocator.allocator();
+    try std.testing.expectError(error.OutOfMemory, printTitle(&writer, "ZIX", failing_alloc));
 }
 
 test "printHelp writes help text" {
@@ -197,7 +198,7 @@ test "confirm alloc failure" {
     var wbuf: [512]u8 = undefined;
     var writer = std.Io.Writer.fixed(&wbuf);
     var reader = std.Io.Reader.fixed("y\n");
-    var fa = std.testing.FailingAllocator.init(std.testing.allocator, .{ .fail_index = 0 });
-    const result = try confirmAlloc(&reader, &writer, true, null, fa.allocator());
+    var failing_allocator = std.testing.FailingAllocator.init(std.testing.allocator, .{ .fail_index = 0 });
+    const result = try confirmAlloc(&reader, &writer, true, null, failing_allocator.allocator());
     try std.testing.expectEqual(true, result);
 }

@@ -89,10 +89,20 @@ test "StaticAllocator blocks alloc after transition" {
     const buf = try a.alloc(u8, 64);
     a.free(buf);
 
+    // During init: resize works (realloc triggers resize vtable).
+    const new_buf = try a.alloc(u8, 32);
+    _ = a.resize(new_buf, 64);
+    a.free(new_buf);
+
     // Transition to static.
     static_alloc.transition_from_init_to_static();
 
-    // During static: free still works (Arena handles it).
+    // During static: free still works.
     const buf2 = try arena_instance.allocator().alloc(u8, 64);
     a.free(buf2);
+
+    // Transition to deinit.
+    static_alloc.transition_from_static_to_deinit();
+    const buf3 = try arena_instance.allocator().alloc(u8, 32);
+    a.free(buf3);
 }

@@ -5,9 +5,6 @@ const ui = @import("core/ui.zig");
 const process = @import("core/process.zig");
 
 pub fn main(init: std.process.Init) !void {
-    // Assert preconditions: GPA must be valid.
-    std.debug.assert(init.gpa.vtable != null);
-
     var args_list: std.ArrayList([]const u8) = .empty;
     defer args_list.deinit(init.gpa);
     for (init.minimal.args.vector) |arg_z| {
@@ -28,7 +25,7 @@ pub fn main(init: std.process.Init) !void {
         .configPrint = ui.configPrint,
     };
 
-    try app.run(init.io, &stdout_writer.interface, args_list.items, deps, init.gpa);
+    try app.run(init.io, &stdout_writer.interface, args_list.items, deps);
 }
 
 test {

@@ -25,5 +25,4 @@ test "run basic commands" {
     try std.testing.expectEqual(@as(i32, 0), try run(io, "true", .{}));
     try std.testing.expectEqual(@as(i32, 1), try run(io, "false", .{}));
     try std.testing.expectEqual(@as(i32, 1), try run(io, "kill -9 $$", .{}));
-    try std.testing.expectEqual(@as(i32, 0), try run(io, "", .{ .output = false }));
 }

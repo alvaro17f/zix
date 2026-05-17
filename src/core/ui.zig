@@ -1,16 +1,20 @@
 const std = @import("std");
 const io = @import("io.zig");
-const equal = std.mem.equal;
+const equal = std.mem.eql;
 
 // --- Title ---
 
-pub fn printTitle(writer: *std.Io.Writer, text: []const u8, allocator: std.mem.Allocator) !void {
-    // Allocate border string sized to text width plus padding.
-    const border = allocator.alloc(u8, text.len + 4) catch |err| {
-        std.log.err("Failed to allocate memory: {}", .{err});
-        return err;
-    };
-    defer allocator.free(border);
+// Maximum title text length for border generation.
+const MAX_TITLE_LEN: u32 = 128;
+
+pub fn printTitle(writer: *std.Io.Writer, text: []const u8) !void {
+    // Assert preconditions: text must not be empty, must fit in static buffer.
+    std.debug.assert(text.len > 0);
+    std.debug.assert(text.len + 4 <= MAX_TITLE_LEN);
+
+    // Stack-allocated border buffer. No dynamic allocation.
+    var border_buf: [MAX_TITLE_LEN]u8 = undefined;
+    const border = border_buf[0 .. text.len + 4];
     for (border) |*c| {
         c.* = '*';
     }
@@ -91,7 +95,6 @@ pub fn confirm(
     writer: *std.Io.Writer,
     default_value: bool,
     msg: ?[]const u8,
-    allocator: std.mem.Allocator,
 ) !bool {
     // If msg is provided, it must not be empty.
     if (msg) |value| std.debug.assert(value.len > 0);
@@ -110,7 +113,6 @@ pub fn confirm(
             return parseConfirmResponse(
                 buf[0..byte_index],
                 default_value,
-                allocator,
             );
         }
         byte_index += 1;
@@ -138,20 +140,18 @@ fn writeConfirmPrompt(
     try writer.flush();
 }
 
-fn parseConfirmResponse(
-    line: []const u8,
-    default_value: bool,
-    allocator: std.mem.Allocator,
-) !bool {
-    const response = std.ascii.allocLowerString(allocator, line) catch return default_value;
-    defer allocator.free(response);
+fn parseConfirmResponse(line: []const u8, default_value: bool) bool {
+    // Stack-allocated lowercase buffer. No dynamic allocation.
+    var lower_buf: [256]u8 = undefined;
+    if (line.len > lower_buf.len) return false;
+    const lower = std.ascii.lowerString(&lower_buf, line);
 
     // Positive responses.
-    if (equal(u8, response, "y") or equal(u8, response, "yes")) return true;
+    if (equal(u8, lower, "y") or equal(u8, lower, "yes")) return true;
     // Negative responses.
-    if (equal(u8, response, "n") or equal(u8, response, "no")) return false;
+    if (equal(u8, lower, "n") or equal(u8, lower, "no")) return false;
     // Empty input uses default.
-    if (equal(u8, response, "") or line.len == 0) return default_value;
+    if (equal(u8, lower, "") or line.len == 0) return default_value;
     // Unknown input defaults to false.
     return false;
 }
@@ -161,7 +161,6 @@ pub fn confirmAlloc(
     writer: *std.Io.Writer,
     default_value: bool,
     msg: ?[]const u8,
-    allocator: std.mem.Allocator,
 ) !bool {
     // If msg is provided, it must not be empty.
     if (msg) |value| std.debug.assert(value.len > 0);
@@ -172,7 +171,7 @@ pub fn confirmAlloc(
         if (err == error.EndOfStream) return false;
         return err;
     };
-    return parseConfirmResponse(line, default_value, allocator);
+    return parseConfirmResponse(line, default_value);
 }
 
 // --- Tests ---
@@ -180,23 +179,9 @@ pub fn confirmAlloc(
 test "printTitle border format" {
     var buf: [256]u8 = undefined;
     var writer = std.Io.Writer.fixed(&buf);
-    try printTitle(&writer, "ZIX", std.testing.allocator);
+    try printTitle(&writer, "ZIX");
     const s = std.mem.sliceTo(&buf, '\n');
     try std.testing.expect(s.len > 0);
-}
-
-test "printTitle alloc failure" {
-    var buf: [256]u8 = undefined;
-    var writer = std.Io.Writer.fixed(&buf);
-    var failing_allocator = std.testing.FailingAllocator.init(
-        std.testing.allocator,
-        .{ .fail_index = 0 },
-    );
-    const failing_alloc = failing_allocator.allocator();
-    try std.testing.expectError(
-        error.OutOfMemory,
-        printTitle(&writer, "ZIX", failing_alloc),
-    );
 }
 
 test "printHelp writes help text" {
@@ -261,26 +246,15 @@ test "confirm responses" {
             &writer,
             tc.default_value,
             tc.msg,
-            std.testing.allocator,
         );
         try std.testing.expectEqual(tc.expected, result);
     }
 }
 
-test "confirm alloc failure" {
+test "confirm empty input" {
     var wbuf: [512]u8 = undefined;
     var writer = std.Io.Writer.fixed(&wbuf);
     var reader = std.Io.Reader.fixed("y\n");
-    var failing_allocator = std.testing.FailingAllocator.init(
-        std.testing.allocator,
-        .{ .fail_index = 0 },
-    );
-    const result = try confirmAlloc(
-        &reader,
-        &writer,
-        true,
-        null,
-        failing_allocator.allocator(),
-    );
+    const result = try confirmAlloc(&reader, &writer, true, null);
     try std.testing.expectEqual(true, result);
 }

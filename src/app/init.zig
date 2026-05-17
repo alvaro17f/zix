@@ -3,7 +3,7 @@ const io = @import("../core/io.zig");
 const ui = @import("../core/ui.zig");
 const cli_module = @import("./cli.zig");
 const cli = cli_module.cli;
-const equal = std.mem.equal;
+const equal = std.mem.eql;
 const process = @import("../core/process.zig");
 const config_module = @import("config.zig");
 pub const Config = config_module.Config;
@@ -14,10 +14,8 @@ pub fn run(
     writer: *std.Io.Writer,
     args: []const []const u8,
     deps: cli_module.Deps,
-    allocator: std.mem.Allocator,
 ) !void {
-    // Assert preconditions: writer must be valid, args must not be empty.
-    std.debug.assert(writer.context != null);
+    // Assert preconditions: args must not be empty.
     std.debug.assert(args.len >= 1);
 
     // Hostname buffer must outlive config to avoid dangling pointer.
@@ -25,7 +23,7 @@ pub fn run(
     var config = Config.defaults(&hostname_buf);
 
     if (args.len <= 1) {
-        return try cli(cli_io, writer, config, deps, allocator);
+        return try cli(cli_io, writer, config, deps);
     }
 
     // Parse flags: each '-' introduces one or more single-char flags.
@@ -95,8 +93,10 @@ pub fn run(
         return try io.printTo(writer, "{s}Error: {s}{s}\n", .{ io.Red, error_message, io.Reset });
     }
 
-    return try cli(cli_io, writer, config, deps, allocator);
+    return try cli(cli_io, writer, config, deps);
 }
+
+// --- Test Mocks ---
 
 fn mockRun(_: std.Io, _: []const u8, _: process.RunOpts) anyerror!i32 {
     return 0;
@@ -105,12 +105,13 @@ noinline fn mockConfirm(
     _: *std.Io.Writer,
     _: bool,
     _: ?[]const u8,
-    _: std.mem.Allocator,
 ) anyerror!bool {
     return true;
 }
-noinline fn mockPrintTitle(_: *std.Io.Writer, _: []const u8, _: std.mem.Allocator) anyerror!void {}
+noinline fn mockPrintTitle(_: *std.Io.Writer, _: []const u8) anyerror!void {}
 noinline fn mockConfigPrint(_: *std.Io.Writer, _: Config) anyerror!void {}
+
+// --- Tests ---
 
 test "run flag branches" {
     const test_io = std.testing.io;
@@ -145,7 +146,7 @@ test "run flag branches" {
     for (cases) |tc| {
         var buf = [_]u8{0} ** 2048;
         var writer = std.Io.Writer.fixed(&buf);
-        run(test_io, &writer, tc.args, mock_deps, std.testing.allocator) catch continue;
+        run(test_io, &writer, tc.args, mock_deps) catch continue;
         if (tc.expect_contains) |needle| {
             const out = std.mem.sliceTo(&buf, 0);
             try std.testing.expect(std.mem.indexOf(u8, out, needle) != null);
@@ -165,7 +166,7 @@ test "run reaches cli" {
         .configPrint = mockConfigPrint,
     };
 
-    try run(test_io, &writer, &.{"zix"}, mock_deps, std.testing.allocator);
+    try run(test_io, &writer, &.{"zix"}, mock_deps);
 }
 
 test "run rejects invalid config via flags" {
@@ -180,8 +181,8 @@ test "run rejects invalid config via flags" {
         .configPrint = mockConfigPrint,
     };
 
-    // -k 0 triggers validate error
-    try run(test_io, &writer, &.{ "zix", "-k", "0" }, mock_deps, std.testing.allocator);
+    // -k 0 triggers validate error.
+    try run(test_io, &writer, &.{ "zix", "-k", "0" }, mock_deps);
     const out = std.mem.sliceTo(&buf, 0);
     try std.testing.expect(std.mem.indexOf(u8, out, "Error") != null);
 }

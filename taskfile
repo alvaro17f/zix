@@ -39,13 +39,13 @@ task_run() {
 }
 
 task_test() {
-    ensure_build
     info "running tests..."
-    "$TEST_EXE"
+    zig build test --summary all
 }
 
 task_coverage() {
-    ensure_build
+    info "building test binary for coverage..."
+    zig build -Dtest-bin=true --summary all
     rm -rf coverage
     info "running kcov..."
     local kcov_exit=0

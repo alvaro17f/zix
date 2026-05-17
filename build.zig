@@ -42,12 +42,14 @@ pub fn build(b: *std.Build) void {
     });
     test_mod.addImport("zon", zon_mod);
 
+    const install_test_bin = b.option(bool, "test-bin", "Install test binary for coverage analysis") orelse false;
+
     const test_compile = b.addTest(.{
         .name = "zix-test",
         .root_module = test_mod,
         .use_llvm = true,
     });
-    b.installArtifact(test_compile);
+    if (install_test_bin) b.installArtifact(test_compile);
 
     const run_tests = b.addRunArtifact(test_compile);
     const test_step = b.step("test", "Run unit tests");

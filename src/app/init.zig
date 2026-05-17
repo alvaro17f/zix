@@ -2,7 +2,8 @@ const std = @import("std");
 const io = @import("../core/io.zig");
 const ui = @import("../core/ui.zig");
 const cli_module = @import("./cli.zig");
-const cli = cli_module.cli;
+const buildCommands = cli_module.buildCommands;
+const execute = cli_module.execute;
 const equal = std.mem.eql;
 const process = @import("../core/process.zig");
 const config_module = @import("config.zig");
@@ -27,7 +28,12 @@ pub fn run(
     var config = Config.defaults(&hostname_buf);
 
     if (args.len <= 1) {
-        return try cli(cli_io, writer, config, deps, allocator);
+        // Phase 1: build commands (allocation allowed).
+        const commands = try buildCommands(config, allocator);
+        // Transition: no more allocation after this point.
+        static_allocator.transition_from_init_to_static();
+        // Phase 2: execute (zero allocation).
+        return try execute(cli_io, writer, config, commands, deps);
     }
 
     // Parse flags: each '-' introduces one or more single-char flags.
@@ -97,7 +103,12 @@ pub fn run(
         return try io.printTo(writer, "{s}Error: {s}{s}\n", .{ io.Red, error_message, io.Reset });
     }
 
-    return try cli(cli_io, writer, config, deps, allocator);
+    // Phase 1: build commands (allocation allowed).
+    const commands = try buildCommands(config, allocator);
+    // Transition: no more allocation after this point.
+    static_allocator.transition_from_init_to_static();
+    // Phase 2: execute (zero allocation).
+    return try execute(cli_io, writer, config, commands, deps);
 }
 
 // --- Test Mocks ---
@@ -122,7 +133,6 @@ test "run flag branches" {
 
     var memory: [4096]u8 = undefined;
     var fba = std.heap.FixedBufferAllocator.init(&memory);
-    var static_allocator = StaticAllocator.init(fba.allocator());
 
     const TestCase = struct {
         args: []const []const u8,
@@ -153,9 +163,12 @@ test "run flag branches" {
     };
 
     for (cases) |tc| {
+        // Reset FBA for each test case to get clean memory.
+        fba.reset();
+        var static_alloc = StaticAllocator.init(fba.allocator());
         var buf = [_]u8{0} ** 2048;
         var writer = std.Io.Writer.fixed(&buf);
-        run(test_io, &writer, tc.args, mock_deps, &static_allocator) catch continue;
+        run(test_io, &writer, tc.args, mock_deps, &static_alloc) catch continue;
         if (tc.expect_contains) |needle| {
             const out = std.mem.sliceTo(&buf, 0);
             try std.testing.expect(std.mem.indexOf(u8, out, needle) != null);

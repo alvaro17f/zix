@@ -11,94 +11,101 @@ pub const Deps = struct {
     configPrint: *const fn (*std.Io.Writer, Config) anyerror!void,
 };
 
-pub fn cli(
-    cli_io: std.Io,
-    writer: *std.Io.Writer,
-    config: Config,
-    deps: Deps,
-    allocator: std.mem.Allocator,
-) !void {
-    // Assert preconditions: repo and hostname must be valid strings.
+/// Pre-built command strings. All allocation happens in buildCommands().
+/// After buildCommands() returns, zero allocation is needed.
+pub const Commands = struct {
+    git_pull: []const u8,
+    git_diff: []const u8,
+    git_status: []const u8,
+    git_add: []const u8,
+    nix_update: []const u8,
+    nix_rebuild: []const u8,
+    nix_keep: []const u8,
+
+    /// nixDiff is a compile-time constant. No allocation needed.
+    pub const nix_diff = cmd.nixDiff;
+};
+
+/// Phase 1: Init. Build all command strings. Allocation allowed.
+pub fn buildCommands(config: Config, allocator: std.mem.Allocator) !Commands {
+    // Assert preconditions.
     std.debug.assert(config.repo.len > 0);
     std.debug.assert(config.hostname.len > 0);
     std.debug.assert(config.keep > 0);
 
+    return Commands{
+        .git_pull = try cmd.gitPull(allocator, config.repo),
+        .git_diff = try cmd.gitDiff(allocator, config.repo),
+        .git_status = try cmd.gitStatus(allocator, config.repo),
+        .git_add = try cmd.gitAdd(allocator, config.repo),
+        .nix_update = try cmd.nixUpdate(allocator, config.repo),
+        .nix_rebuild = try cmd.nixRebuild(allocator, config.repo, config.hostname),
+        .nix_keep = try cmd.nixKeep(allocator, config.keep),
+    };
+}
+
+/// Phase 2: Static. Execute all operations using pre-built commands.
+/// Zero allocation in this phase.
+pub fn execute(
+    cli_io: std.Io,
+    writer: *std.Io.Writer,
+    config: Config,
+    commands: Commands,
+    deps: Deps,
+) !void {
     try deps.printTitle(writer, "ZIX Configuration");
     try deps.configPrint(writer, config);
 
     if (try deps.confirm(writer, true, null)) {
-        try pullRepo(cli_io, writer, config.repo, deps, allocator);
+        // Git pull.
+        try deps.printTitle(writer, "Git Pull");
+        const pull_status = try deps.run(cli_io, commands.git_pull, .{});
+        if (pull_status != 0) {
+            try io.printTo(writer, "{s}Failed to pull changes{s}\n", .{ io.Red, io.Reset });
+            return error.GitPullFailed;
+        }
 
+        // Nix update (optional).
         if (config.update) {
             try deps.printTitle(writer, "Nix Update");
-            const update_cmd = try cmd.nixUpdate(allocator, config.repo);
-            _ = try deps.run(cli_io, update_cmd, .{});
+            _ = try deps.run(cli_io, commands.nix_update, .{});
         }
 
-        try stageGitChanges(cli_io, writer, config.repo, deps, allocator);
+        // Stage git changes.
+        try stageGitChanges(cli_io, writer, commands, deps);
 
+        // Nixos rebuild.
         try deps.printTitle(writer, "Nixos Rebuild");
-        const rebuild_cmd = try cmd.nixRebuild(
-            allocator,
-            config.repo,
-            config.hostname,
-        );
-        _ = try deps.run(cli_io, rebuild_cmd, .{});
-        const keep_cmd = try cmd.nixKeep(allocator, config.keep);
-        _ = try deps.run(cli_io, keep_cmd, .{});
+        _ = try deps.run(cli_io, commands.nix_rebuild, .{});
+        _ = try deps.run(cli_io, commands.nix_keep, .{});
 
+        // Nix diff (optional).
         if (config.diff) {
             try deps.printTitle(writer, "Nix Diff");
-            _ = try deps.run(cli_io, cmd.nixDiff, .{});
+            _ = try deps.run(cli_io, Commands.nix_diff, .{});
         }
-    }
-}
-
-fn pullRepo(
-    cli_io: std.Io,
-    writer: *std.Io.Writer,
-    repo: []const u8,
-    deps: Deps,
-    allocator: std.mem.Allocator,
-) !void {
-    // Assert preconditions: repo must be a valid path.
-    std.debug.assert(repo.len > 0);
-
-    try deps.printTitle(writer, "Git Pull");
-    const pull_cmd = try cmd.gitPull(allocator, repo);
-    const status = try deps.run(cli_io, pull_cmd, .{});
-    if (status != 0) {
-        try io.printTo(writer, "{s}Failed to pull changes{s}\n", .{ io.Red, io.Reset });
-        return error.GitPullFailed;
     }
 }
 
 fn stageGitChanges(
     cli_io: std.Io,
     writer: *std.Io.Writer,
-    repo: []const u8,
+    commands: Commands,
     deps: Deps,
-    allocator: std.mem.Allocator,
 ) !void {
-    // Assert preconditions: repo must be a valid path.
-    std.debug.assert(repo.len > 0);
-
     // diff --exit-code returns 1 when there are unstaged changes.
-    const diff_cmd = try cmd.gitDiff(allocator, repo);
-    const has_changes = try deps.run(cli_io, diff_cmd, .{ .output = false });
+    const has_changes = try deps.run(cli_io, commands.git_diff, .{ .output = false });
     if (has_changes != 1) return;
 
     try deps.printTitle(writer, "Git Changes");
-    const status_cmd = try cmd.gitStatus(allocator, repo);
-    _ = try deps.run(cli_io, status_cmd, .{});
+    _ = try deps.run(cli_io, commands.git_status, .{});
 
     if (try deps.confirm(
         writer,
         true,
         "Do you want to add these changes to the stage?",
     )) {
-        const add_cmd = try cmd.gitAdd(allocator, repo);
-        _ = deps.run(cli_io, add_cmd, .{}) catch |err| {
+        _ = deps.run(cli_io, commands.git_add, .{}) catch |err| {
             try io.printTo(
                 writer,
                 "{s}Failed to add changes to the stage: {}{s}\n",
@@ -166,7 +173,7 @@ fn testConfig(update: bool, diff: bool) Config {
     };
 }
 
-test "cli branches" {
+test "execute branches" {
     var memory: [4096]u8 = undefined;
     var fba = std.heap.FixedBufferAllocator.init(&memory);
     const allocator = fba.allocator();
@@ -182,6 +189,11 @@ test "cli branches" {
         .configPrint = mockConfigPrint,
     };
 
+    // Phase 1: build commands.
+    const commands = try buildCommands(testConfig(true, true), allocator);
+
+    // Phase 2: execute (zero alloc from here).
+
     // confirm false => early return.
     const no_deps = Deps{
         .run = mockRun,
@@ -189,7 +201,7 @@ test "cli branches" {
         .printTitle = mockPrintTitle,
         .configPrint = mockConfigPrint,
     };
-    try cli(cli_io, &writer, testConfig(false, false), no_deps, allocator);
+    try execute(cli_io, &writer, testConfig(false, false), commands, no_deps);
 
     // git pull fails.
     const fail_deps = Deps{
@@ -204,11 +216,11 @@ test "cli branches" {
     };
     try std.testing.expectError(
         error.GitPullFailed,
-        cli(cli_io, &writer, testConfig(false, false), fail_deps, allocator),
+        execute(cli_io, &writer, testConfig(false, false), commands, fail_deps),
     );
 
     // update + diff + git changes + add.
-    try cli(cli_io, &writer, testConfig(true, true), deps, allocator);
+    try execute(cli_io, &writer, testConfig(true, true), commands, deps);
 
     // no git changes (diff returns 0).
     const no_changes_deps = Deps{
@@ -221,10 +233,10 @@ test "cli branches" {
         .printTitle = mockPrintTitle,
         .configPrint = mockConfigPrint,
     };
-    try cli(cli_io, &writer, testConfig(false, false), no_changes_deps, allocator);
+    try execute(cli_io, &writer, testConfig(false, false), commands, no_changes_deps);
 }
 
-test "cli git add failure" {
+test "execute git add failure" {
     var memory: [4096]u8 = undefined;
     var fba = std.heap.FixedBufferAllocator.init(&memory);
     const allocator = fba.allocator();
@@ -232,6 +244,8 @@ test "cli git add failure" {
     var buf: [4096]u8 = undefined;
     var writer = std.Io.Writer.fixed(&buf);
     const cli_io = std.testing.io;
+
+    const commands = try buildCommands(testConfig(false, true), allocator);
 
     const add_fail_deps = Deps{
         .run = struct {
@@ -246,13 +260,13 @@ test "cli git add failure" {
         .configPrint = mockConfigPrint,
     };
 
-    try cli(cli_io, &writer, testConfig(false, true), add_fail_deps, allocator);
+    try execute(cli_io, &writer, testConfig(false, true), commands, add_fail_deps);
     const out = std.mem.sliceTo(&buf, 0);
     try std.testing.expect(std.mem.indexOf(u8, out, "Failed to add changes") != null);
     try std.testing.expect(std.mem.indexOf(u8, out, "successfully") == null);
 }
 
-test "cli decline add changes" {
+test "execute decline add changes" {
     var memory: [4096]u8 = undefined;
     var fba = std.heap.FixedBufferAllocator.init(&memory);
     const allocator = fba.allocator();
@@ -261,6 +275,8 @@ test "cli decline add changes" {
     var writer = std.Io.Writer.fixed(&buf);
     const cli_io = std.testing.io;
 
+    const commands = try buildCommands(testConfig(false, true), allocator);
+
     confirm_call_count = 0;
     const decline_deps = Deps{
         .run = mockRun,
@@ -268,7 +284,7 @@ test "cli decline add changes" {
         .printTitle = mockPrintTitle,
         .configPrint = mockConfigPrint,
     };
-    try cli(cli_io, &writer, testConfig(false, true), decline_deps, allocator);
+    try execute(cli_io, &writer, testConfig(false, true), commands, decline_deps);
     const out = std.mem.sliceTo(&buf, 0);
     try std.testing.expect(std.mem.indexOf(u8, out, "not added") != null);
     try std.testing.expect(std.mem.indexOf(u8, out, "successfully") == null);

@@ -16,37 +16,35 @@ pub fn cli(
     writer: *std.Io.Writer,
     config: Config,
     deps: Deps,
+    allocator: std.mem.Allocator,
 ) !void {
     // Assert preconditions: repo and hostname must be valid strings.
     std.debug.assert(config.repo.len > 0);
     std.debug.assert(config.hostname.len > 0);
     std.debug.assert(config.keep > 0);
 
-    // Static command buffer. No dynamic allocation.
-    var command_buf: [cmd.MAX_COMMAND_LEN]u8 = undefined;
-
     try deps.printTitle(writer, "ZIX Configuration");
     try deps.configPrint(writer, config);
 
     if (try deps.confirm(writer, true, null)) {
-        try pullRepo(cli_io, &command_buf, writer, config.repo, deps);
+        try pullRepo(cli_io, writer, config.repo, deps, allocator);
 
         if (config.update) {
             try deps.printTitle(writer, "Nix Update");
-            const update_cmd = try cmd.nixUpdate(&command_buf, config.repo);
+            const update_cmd = try cmd.nixUpdate(allocator, config.repo);
             _ = try deps.run(cli_io, update_cmd, .{});
         }
 
-        try stageGitChanges(cli_io, &command_buf, writer, config.repo, deps);
+        try stageGitChanges(cli_io, writer, config.repo, deps, allocator);
 
         try deps.printTitle(writer, "Nixos Rebuild");
         const rebuild_cmd = try cmd.nixRebuild(
-            &command_buf,
+            allocator,
             config.repo,
             config.hostname,
         );
         _ = try deps.run(cli_io, rebuild_cmd, .{});
-        const keep_cmd = try cmd.nixKeep(&command_buf, config.keep);
+        const keep_cmd = try cmd.nixKeep(allocator, config.keep);
         _ = try deps.run(cli_io, keep_cmd, .{});
 
         if (config.diff) {
@@ -58,16 +56,16 @@ pub fn cli(
 
 fn pullRepo(
     cli_io: std.Io,
-    command_buf: []u8,
     writer: *std.Io.Writer,
     repo: []const u8,
     deps: Deps,
+    allocator: std.mem.Allocator,
 ) !void {
     // Assert preconditions: repo must be a valid path.
     std.debug.assert(repo.len > 0);
 
     try deps.printTitle(writer, "Git Pull");
-    const pull_cmd = try cmd.gitPull(command_buf, repo);
+    const pull_cmd = try cmd.gitPull(allocator, repo);
     const status = try deps.run(cli_io, pull_cmd, .{});
     if (status != 0) {
         try io.printTo(writer, "{s}Failed to pull changes{s}\n", .{ io.Red, io.Reset });
@@ -77,21 +75,21 @@ fn pullRepo(
 
 fn stageGitChanges(
     cli_io: std.Io,
-    command_buf: []u8,
     writer: *std.Io.Writer,
     repo: []const u8,
     deps: Deps,
+    allocator: std.mem.Allocator,
 ) !void {
     // Assert preconditions: repo must be a valid path.
     std.debug.assert(repo.len > 0);
 
     // diff --exit-code returns 1 when there are unstaged changes.
-    const diff_cmd = try cmd.gitDiff(command_buf, repo);
+    const diff_cmd = try cmd.gitDiff(allocator, repo);
     const has_changes = try deps.run(cli_io, diff_cmd, .{ .output = false });
     if (has_changes != 1) return;
 
     try deps.printTitle(writer, "Git Changes");
-    const status_cmd = try cmd.gitStatus(command_buf, repo);
+    const status_cmd = try cmd.gitStatus(allocator, repo);
     _ = try deps.run(cli_io, status_cmd, .{});
 
     if (try deps.confirm(
@@ -99,7 +97,7 @@ fn stageGitChanges(
         true,
         "Do you want to add these changes to the stage?",
     )) {
-        const add_cmd = try cmd.gitAdd(command_buf, repo);
+        const add_cmd = try cmd.gitAdd(allocator, repo);
         _ = deps.run(cli_io, add_cmd, .{}) catch |err| {
             try io.printTo(
                 writer,
@@ -169,6 +167,10 @@ fn testConfig(update: bool, diff: bool) Config {
 }
 
 test "cli branches" {
+    var arena_instance = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena_instance.deinit();
+    const allocator = arena_instance.allocator();
+
     var buf: [4096]u8 = undefined;
     var writer = std.Io.Writer.fixed(&buf);
     const cli_io = std.testing.io;
@@ -187,7 +189,7 @@ test "cli branches" {
         .printTitle = mockPrintTitle,
         .configPrint = mockConfigPrint,
     };
-    try cli(cli_io, &writer, testConfig(false, false), no_deps);
+    try cli(cli_io, &writer, testConfig(false, false), no_deps, allocator);
 
     // git pull fails.
     const fail_deps = Deps{
@@ -202,11 +204,11 @@ test "cli branches" {
     };
     try std.testing.expectError(
         error.GitPullFailed,
-        cli(cli_io, &writer, testConfig(false, false), fail_deps),
+        cli(cli_io, &writer, testConfig(false, false), fail_deps, allocator),
     );
 
     // update + diff + git changes + add.
-    try cli(cli_io, &writer, testConfig(true, true), deps);
+    try cli(cli_io, &writer, testConfig(true, true), deps, allocator);
 
     // no git changes (diff returns 0).
     const no_changes_deps = Deps{
@@ -219,10 +221,14 @@ test "cli branches" {
         .printTitle = mockPrintTitle,
         .configPrint = mockConfigPrint,
     };
-    try cli(cli_io, &writer, testConfig(false, false), no_changes_deps);
+    try cli(cli_io, &writer, testConfig(false, false), no_changes_deps, allocator);
 }
 
 test "cli git add failure" {
+    var arena_instance = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena_instance.deinit();
+    const allocator = arena_instance.allocator();
+
     var buf: [4096]u8 = undefined;
     var writer = std.Io.Writer.fixed(&buf);
     const cli_io = std.testing.io;
@@ -240,13 +246,17 @@ test "cli git add failure" {
         .configPrint = mockConfigPrint,
     };
 
-    try cli(cli_io, &writer, testConfig(false, true), add_fail_deps);
+    try cli(cli_io, &writer, testConfig(false, true), add_fail_deps, allocator);
     const out = std.mem.sliceTo(&buf, 0);
     try std.testing.expect(std.mem.indexOf(u8, out, "Failed to add changes") != null);
     try std.testing.expect(std.mem.indexOf(u8, out, "successfully") == null);
 }
 
 test "cli decline add changes" {
+    var arena_instance = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena_instance.deinit();
+    const allocator = arena_instance.allocator();
+
     var buf: [4096]u8 = undefined;
     var writer = std.Io.Writer.fixed(&buf);
     const cli_io = std.testing.io;
@@ -258,7 +268,7 @@ test "cli decline add changes" {
         .printTitle = mockPrintTitle,
         .configPrint = mockConfigPrint,
     };
-    try cli(cli_io, &writer, testConfig(false, true), decline_deps);
+    try cli(cli_io, &writer, testConfig(false, true), decline_deps, allocator);
     const out = std.mem.sliceTo(&buf, 0);
     try std.testing.expect(std.mem.indexOf(u8, out, "not added") != null);
     try std.testing.expect(std.mem.indexOf(u8, out, "successfully") == null);

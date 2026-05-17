@@ -7,6 +7,7 @@ const equal = std.mem.eql;
 const process = @import("../core/process.zig");
 const config_module = @import("config.zig");
 pub const Config = config_module.Config;
+const StaticAllocator = @import("../core/static_allocator.zig");
 const VERSION = @import("zon").version;
 
 pub fn run(
@@ -14,16 +15,19 @@ pub fn run(
     writer: *std.Io.Writer,
     args: []const []const u8,
     deps: cli_module.Deps,
+    static_allocator: *StaticAllocator,
 ) !void {
     // Assert preconditions: args must not be empty.
     std.debug.assert(args.len >= 1);
+
+    const allocator = static_allocator.allocator();
 
     // Hostname buffer must outlive config to avoid dangling pointer.
     var hostname_buf: [std.posix.HOST_NAME_MAX]u8 = undefined;
     var config = Config.defaults(&hostname_buf);
 
     if (args.len <= 1) {
-        return try cli(cli_io, writer, config, deps);
+        return try cli(cli_io, writer, config, deps, allocator);
     }
 
     // Parse flags: each '-' introduces one or more single-char flags.
@@ -93,7 +97,7 @@ pub fn run(
         return try io.printTo(writer, "{s}Error: {s}{s}\n", .{ io.Red, error_message, io.Reset });
     }
 
-    return try cli(cli_io, writer, config, deps);
+    return try cli(cli_io, writer, config, deps, allocator);
 }
 
 // --- Test Mocks ---
@@ -115,6 +119,11 @@ noinline fn mockConfigPrint(_: *std.Io.Writer, _: Config) anyerror!void {}
 
 test "run flag branches" {
     const test_io = std.testing.io;
+
+    var arena_instance = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena_instance.deinit();
+    var static_allocator = StaticAllocator.init(arena_instance.allocator());
+
     const TestCase = struct {
         args: []const []const u8,
         expect_contains: ?[]const u8 = null,
@@ -146,7 +155,7 @@ test "run flag branches" {
     for (cases) |tc| {
         var buf = [_]u8{0} ** 2048;
         var writer = std.Io.Writer.fixed(&buf);
-        run(test_io, &writer, tc.args, mock_deps) catch continue;
+        run(test_io, &writer, tc.args, mock_deps, &static_allocator) catch continue;
         if (tc.expect_contains) |needle| {
             const out = std.mem.sliceTo(&buf, 0);
             try std.testing.expect(std.mem.indexOf(u8, out, needle) != null);
@@ -159,6 +168,10 @@ test "run reaches cli" {
     var buf: [256]u8 = undefined;
     var writer = std.Io.Writer.fixed(&buf);
 
+    var arena_instance = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena_instance.deinit();
+    var static_allocator = StaticAllocator.init(arena_instance.allocator());
+
     const mock_deps = cli_module.Deps{
         .run = mockRun,
         .confirm = mockConfirm,
@@ -166,13 +179,17 @@ test "run reaches cli" {
         .configPrint = mockConfigPrint,
     };
 
-    try run(test_io, &writer, &.{"zix"}, mock_deps);
+    try run(test_io, &writer, &.{"zix"}, mock_deps, &static_allocator);
 }
 
 test "run rejects invalid config via flags" {
     const test_io = std.testing.io;
     var buf: [256]u8 = undefined;
     var writer = std.Io.Writer.fixed(&buf);
+
+    var arena_instance = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena_instance.deinit();
+    var static_allocator = StaticAllocator.init(arena_instance.allocator());
 
     const mock_deps = cli_module.Deps{
         .run = mockRun,
@@ -182,7 +199,7 @@ test "run rejects invalid config via flags" {
     };
 
     // -k 0 triggers validate error.
-    try run(test_io, &writer, &.{ "zix", "-k", "0" }, mock_deps);
+    try run(test_io, &writer, &.{ "zix", "-k", "0" }, mock_deps, &static_allocator);
     const out = std.mem.sliceTo(&buf, 0);
     try std.testing.expect(std.mem.indexOf(u8, out, "Error") != null);
 }

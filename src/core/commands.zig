@@ -1,65 +1,56 @@
 const std = @import("std");
 
-// Maximum command string length. All commands must fit within this limit.
-pub const MAX_COMMAND_LEN: u32 = 256;
-
-pub fn gitPull(buf: []u8, repo: []const u8) ![]const u8 {
-    // Assert preconditions: repo must be a valid path, buffer must be large enough.
+pub fn gitPull(allocator: std.mem.Allocator, repo: []const u8) ![]const u8 {
+    // Assert preconditions: repo must be a valid path.
     std.debug.assert(repo.len > 0);
-    std.debug.assert(buf.len >= MAX_COMMAND_LEN);
-    return std.fmt.bufPrint(buf, "git -C {s} pull", .{repo});
+    return std.fmt.allocPrint(allocator, "git -C {s} pull", .{repo});
 }
 
-pub fn gitDiff(buf: []u8, repo: []const u8) ![]const u8 {
+pub fn gitDiff(allocator: std.mem.Allocator, repo: []const u8) ![]const u8 {
     std.debug.assert(repo.len > 0);
-    std.debug.assert(buf.len >= MAX_COMMAND_LEN);
-    return std.fmt.bufPrint(buf, "git -C {s} diff --exit-code", .{repo});
+    return std.fmt.allocPrint(allocator, "git -C {s} diff --exit-code", .{repo});
 }
 
-pub fn gitStatus(buf: []u8, repo: []const u8) ![]const u8 {
+pub fn gitStatus(allocator: std.mem.Allocator, repo: []const u8) ![]const u8 {
     std.debug.assert(repo.len > 0);
-    std.debug.assert(buf.len >= MAX_COMMAND_LEN);
-    return std.fmt.bufPrint(buf, "git -C {s} status --porcelain", .{repo});
+    return std.fmt.allocPrint(allocator, "git -C {s} status --porcelain", .{repo});
 }
 
-pub fn gitAdd(buf: []u8, repo: []const u8) ![]const u8 {
+pub fn gitAdd(allocator: std.mem.Allocator, repo: []const u8) ![]const u8 {
     std.debug.assert(repo.len > 0);
-    std.debug.assert(buf.len >= MAX_COMMAND_LEN);
-    return std.fmt.bufPrint(buf, "git -C {s} add .", .{repo});
+    return std.fmt.allocPrint(allocator, "git -C {s} add .", .{repo});
 }
 
-pub fn nixUpdate(buf: []u8, repo: []const u8) ![]const u8 {
+pub fn nixUpdate(allocator: std.mem.Allocator, repo: []const u8) ![]const u8 {
     std.debug.assert(repo.len > 0);
-    std.debug.assert(buf.len >= MAX_COMMAND_LEN);
-    return std.fmt.bufPrint(buf, "nix flake update --flake {s}", .{repo});
+    return std.fmt.allocPrint(allocator, "nix flake update --flake {s}", .{repo});
 }
 
 pub fn nixRebuild(
-    buf: []u8,
+    allocator: std.mem.Allocator,
     repo: []const u8,
     hostname: []const u8,
 ) ![]const u8 {
     // Assert preconditions: repo and hostname must be valid.
     std.debug.assert(repo.len > 0);
     std.debug.assert(hostname.len > 0);
-    std.debug.assert(buf.len >= MAX_COMMAND_LEN);
-    return std.fmt.bufPrint(
-        buf,
+    return std.fmt.allocPrint(
+        allocator,
         "sudo nixos-rebuild switch --flake {s}#{s} --show-trace",
         .{ repo, hostname },
     );
 }
 
 pub fn nixKeep(
-    buf: []u8,
+    allocator: std.mem.Allocator,
     generations_to_keep: u8,
 ) ![]const u8 {
     // generations_to_keep must be > 0 to be meaningful.
     std.debug.assert(generations_to_keep > 0);
-    std.debug.assert(buf.len >= MAX_COMMAND_LEN);
-    return std.fmt.bufPrint(
-        buf,
-        "sudo nix-env --profile /nix/var/nix/profiles/system" ++ " --delete-generations +{d}",
+    return std.fmt.allocPrint(
+        allocator,
+        "sudo nix-env --profile /nix/var/nix/profiles/system"
+        ++ " --delete-generations +{d}",
         .{generations_to_keep},
     );
 }
@@ -71,25 +62,33 @@ pub const nixDiff =
     "nix profile diff-closures" ++ nix_diff_profile ++ " | tac" ++ nix_diff_awk ++ " | tac";
 
 test "command strings" {
-    var buf: [MAX_COMMAND_LEN]u8 = undefined;
-    const s0 = try gitPull(&buf, "/repo");
+    const alloc = std.testing.allocator;
+    const s0 = try gitPull(alloc, "/repo");
+    defer alloc.free(s0);
     try std.testing.expectEqualStrings("git -C /repo pull", s0);
-    const s1 = try gitDiff(&buf, "/repo");
+    const s1 = try gitDiff(alloc, "/repo");
+    defer alloc.free(s1);
     try std.testing.expectEqualStrings("git -C /repo diff --exit-code", s1);
-    const s2 = try gitStatus(&buf, "/repo");
+    const s2 = try gitStatus(alloc, "/repo");
+    defer alloc.free(s2);
     try std.testing.expectEqualStrings("git -C /repo status --porcelain", s2);
-    const s3 = try gitAdd(&buf, "/repo");
+    const s3 = try gitAdd(alloc, "/repo");
+    defer alloc.free(s3);
     try std.testing.expectEqualStrings("git -C /repo add .", s3);
-    const s4 = try nixUpdate(&buf, "/repo");
+    const s4 = try nixUpdate(alloc, "/repo");
+    defer alloc.free(s4);
     try std.testing.expectEqualStrings("nix flake update --flake /repo", s4);
-    const s5 = try nixRebuild(&buf, "/repo", "host");
+    const s5 = try nixRebuild(alloc, "/repo", "host");
+    defer alloc.free(s5);
     try std.testing.expectEqualStrings(
         "sudo nixos-rebuild switch --flake /repo#host --show-trace",
         s5,
     );
-    const s6 = try nixKeep(&buf, 5);
+    const s6 = try nixKeep(alloc, 5);
+    defer alloc.free(s6);
     try std.testing.expectEqualStrings(
-        "sudo nix-env --profile /nix/var/nix/profiles/system" ++ " --delete-generations +5",
+        "sudo nix-env --profile /nix/var/nix/profiles/system"
+        ++ " --delete-generations +5",
         s6,
     );
 }

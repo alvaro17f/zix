@@ -33,16 +33,34 @@ test "defaults produces valid config" {
 }
 
 test "validate accepts valid config" {
-    const config = Config{ .repo = "~/.dotfiles", .hostname = "nixos", .keep = 10, .update = false, .diff = false };
+    const config = Config{
+        .repo = "~/.dotfiles",
+        .hostname = "nixos",
+        .keep = 10,
+        .update = false,
+        .diff = false,
+    };
     try std.testing.expectEqual(@as(?[]const u8, null), config.validate());
 }
 
 test "validate rejects empty repo" {
-    const config = Config{ .repo = "", .hostname = "nixos", .keep = 10, .update = false, .diff = false };
+    const config = Config{
+        .repo = "",
+        .hostname = "nixos",
+        .keep = 10,
+        .update = false,
+        .diff = false,
+    };
     try std.testing.expect(config.validate() != null);
 }
 
 test "validate rejects zero keep" {
-    const config = Config{ .repo = "~/.dotfiles", .hostname = "nixos", .keep = 0, .update = false, .diff = false };
+    const config = Config{
+        .repo = "~/.dotfiles",
+        .hostname = "nixos",
+        .keep = 0,
+        .update = false,
+        .diff = false,
+    };
     try std.testing.expect(config.validate() != null);
 }

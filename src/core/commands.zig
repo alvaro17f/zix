@@ -20,15 +20,35 @@ pub fn nixUpdate(allocator: std.mem.Allocator, repo: []const u8) ![]const u8 {
     return std.fmt.allocPrint(allocator, "nix flake update --flake {s}", .{repo});
 }
 
-pub fn nixRebuild(allocator: std.mem.Allocator, repo: []const u8, hostname: []const u8) ![]const u8 {
-    return std.fmt.allocPrint(allocator, "sudo nixos-rebuild switch --flake {s}#{s} --show-trace", .{ repo, hostname });
+pub fn nixRebuild(
+    allocator: std.mem.Allocator,
+    repo: []const u8,
+    hostname: []const u8,
+) ![]const u8 {
+    return std.fmt.allocPrint(
+        allocator,
+        "sudo nixos-rebuild switch --flake {s}#{s} --show-trace",
+        .{ repo, hostname },
+    );
 }
 
-pub fn nixKeep(allocator: std.mem.Allocator, generations_to_keep: u8) ![]const u8 {
-    return std.fmt.allocPrint(allocator, "sudo nix-env --profile /nix/var/nix/profiles/system --delete-generations +{d}", .{generations_to_keep});
+pub fn nixKeep(
+    allocator: std.mem.Allocator,
+    generations_to_keep: u8,
+) ![]const u8 {
+    return std.fmt.allocPrint(
+        allocator,
+        "sudo nix-env --profile /nix/var/nix/profiles/system" ++ " --delete-generations +{d}",
+        .{generations_to_keep},
+    );
 }
 
-pub const nixDiff = "nix profile diff-closures --profile /nix/var/nix/profiles/system | tac | awk '/Version/{print; exit} 1' | tac";
+const nix_diff_profile = " --profile /nix/var/nix/profiles/system";
+const nix_diff_awk = " | awk '/Version/{print; exit} 1'";
+
+pub fn nixDiff() []const u8 {
+    return "nix profile diff-closures" ++ nix_diff_profile ++ " | tac" ++ nix_diff_awk ++ " | tac";
+}
 
 test "command strings" {
     const alloc = std.testing.allocator;
@@ -49,8 +69,14 @@ test "command strings" {
     try std.testing.expectEqualStrings("nix flake update --flake /repo", s4);
     const s5 = try nixRebuild(alloc, "/repo", "host");
     defer alloc.free(s5);
-    try std.testing.expectEqualStrings("sudo nixos-rebuild switch --flake /repo#host --show-trace", s5);
+    try std.testing.expectEqualStrings(
+        "sudo nixos-rebuild switch --flake /repo#host --show-trace",
+        s5,
+    );
     const s6 = try nixKeep(alloc, 5);
     defer alloc.free(s6);
-    try std.testing.expectEqualStrings("sudo nix-env --profile /nix/var/nix/profiles/system --delete-generations +5", s6);
+    try std.testing.expectEqualStrings(
+        "sudo nix-env --profile /nix/var/nix/profiles/system" ++ " --delete-generations +5",
+        s6,
+    );
 }

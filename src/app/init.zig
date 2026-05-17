@@ -9,7 +9,13 @@ const config_module = @import("config.zig");
 pub const Config = config_module.Config;
 const VERSION = @import("zon").version;
 
-pub fn run(cli_io: std.Io, writer: *std.Io.Writer, args: []const []const u8, deps: cli_module.Deps, allocator: std.mem.Allocator) !void {
+pub fn run(
+    cli_io: std.Io,
+    writer: *std.Io.Writer,
+    args: []const []const u8,
+    deps: cli_module.Deps,
+    allocator: std.mem.Allocator,
+) !void {
     // Hostname buffer must outlive config to avoid dangling pointer.
     var hostname_buf: [std.posix.HOST_NAME_MAX]u8 = undefined;
     var config = Config.defaults(&hostname_buf);
@@ -37,18 +43,30 @@ pub fn run(cli_io: std.Io, writer: *std.Io.Writer, args: []const []const u8, dep
                         // These flags consume the next argument as their value.
                         arg_index += 1;
                         if (arg_index >= args.len) {
-                            return try io.printTo(writer, "{s}Error: \"-{c}\" flag requires an argument\n{s}", .{ io.Red, flag, io.Reset });
+                            return try io.printTo(
+                                writer,
+                                "{s}Error: \"-{c}\" flag requires an argument\n{s}",
+                                .{ io.Red, flag, io.Reset },
+                            );
                         }
                         if (flag == 'r') config.repo = args[arg_index];
                         if (flag == 'n') config.hostname = args[arg_index];
                         if (flag == 'k') {
                             const number = std.fmt.parseInt(u8, args[arg_index], 10) catch {
-                                return try io.printTo(writer, "{s}Error: Value of \"-k\" flag is not numeric.\n{s}", .{ io.Red, io.Reset });
+                                return try io.printTo(
+                                    writer,
+                                    "{s}Error: Value of \"-k\" flag is not numeric.\n{s}",
+                                    .{ io.Red, io.Reset },
+                                );
                             };
                             config.keep = number;
                         }
                     },
-                    else => return try io.printTo(writer, "{s}Error: Unknown flag \"-{c}\"\n{s}", .{ io.Red, flag, io.Reset }),
+                    else => return try io.printTo(
+                        writer,
+                        "{s}Error: Unknown flag \"-{c}\"\n{s}",
+                        .{ io.Red, flag, io.Reset },
+                    ),
                 }
             }
         } else {
@@ -58,7 +76,11 @@ pub fn run(cli_io: std.Io, writer: *std.Io.Writer, args: []const []const u8, dep
             if (equal(u8, arg, "version")) {
                 return try ui.printVersion(writer, VERSION);
             }
-            return try io.printTo(writer, "{s}Error: Unknown argument \"{s}\"\n{s}", .{ io.Red, arg, io.Reset });
+            return try io.printTo(
+                writer,
+                "{s}Error: Unknown argument \"{s}\"\n{s}",
+                .{ io.Red, arg, io.Reset },
+            );
         }
     }
 
@@ -73,7 +95,12 @@ pub fn run(cli_io: std.Io, writer: *std.Io.Writer, args: []const []const u8, dep
 fn mockRun(_: std.Io, _: []const u8, _: process.RunOpts) anyerror!i32 {
     return 0;
 }
-noinline fn mockConfirm(_: *std.Io.Writer, _: bool, _: ?[]const u8, _: std.mem.Allocator) anyerror!bool {
+noinline fn mockConfirm(
+    _: *std.Io.Writer,
+    _: bool,
+    _: ?[]const u8,
+    _: std.mem.Allocator,
+) anyerror!bool {
     return true;
 }
 noinline fn mockPrintTitle(_: *std.Io.Writer, _: []const u8, _: std.mem.Allocator) anyerror!void {}

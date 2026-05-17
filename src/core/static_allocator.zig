@@ -25,12 +25,6 @@ pub fn init(parent_allocator: mem.Allocator) StaticAllocator {
     };
 }
 
-pub fn deinit(self: *StaticAllocator) void {
-    self.* = undefined;
-}
-
-/// Call after all startup allocation is complete.
-/// Any subsequent alloc/resize will panic.
 pub fn transition_from_init_to_static(self: *StaticAllocator) void {
     assert(self.state == .init);
     self.state = .static;

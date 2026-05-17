@@ -6,8 +6,7 @@ const buildCommands = cli_module.buildCommands;
 const execute = cli_module.execute;
 const equal = std.mem.eql;
 const process = @import("../core/process.zig");
-const config_module = @import("config.zig");
-pub const Config = config_module.Config;
+const Config = @import("config.zig").Config;
 const StaticAllocator = @import("../core/static_allocator.zig");
 const VERSION = @import("zon").version;
 

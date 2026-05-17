@@ -156,7 +156,7 @@ fn parseConfirmResponse(line: []const u8, default_value: bool) bool {
     return false;
 }
 
-pub fn confirmAlloc(
+fn confirmAlloc(
     reader: *std.Io.Reader,
     writer: *std.Io.Writer,
     default_value: bool,

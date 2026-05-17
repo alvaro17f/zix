@@ -6,7 +6,8 @@ const process = @import("core/process.zig");
 const StaticAllocator = @import("core/static_allocator.zig");
 
 /// Pre-allocated memory for all runtime allocations.
-/// Sized for: args_list (~256 bytes) + command strings (~6 x 128 bytes) + margin.
+/// Sized for: args_list (~256 bytes) + 7 command strings (~128 bytes each) + margin.
+/// Increase if more commands are added or repo paths are longer.
 const MEMORY_SIZE: usize = 2048;
 
 pub fn main(init: std.process.Init) !void {

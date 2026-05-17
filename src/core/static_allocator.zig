@@ -31,9 +31,16 @@ pub fn transition_from_init_to_static(self: *StaticAllocator) void {
 }
 
 /// Call during shutdown to allow free.
+/// Panics if in .init state (transition_to_static was never called).
 pub fn transition_from_static_to_deinit(self: *StaticAllocator) void {
     assert(self.state == .static);
     self.state = .deinit;
+}
+
+/// Safe version: only transitions if currently in .static state.
+/// Used when early returns (help, version, errors) may skip transition_to_static.
+pub fn transition_from_static_to_deinit_if_static(self: *StaticAllocator) void {
+    if (self.state == .static) self.state = .deinit;
 }
 
 pub fn allocator(self: *StaticAllocator) mem.Allocator {

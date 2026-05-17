@@ -16,7 +16,6 @@ pub fn main(init: std.process.Init) !void {
     var fba = std.heap.FixedBufferAllocator.init(&memory);
 
     var static_allocator = StaticAllocator.init(fba.allocator());
-    defer static_allocator.transition_from_static_to_deinit();
 
     const allocator = static_allocator.allocator();
 
@@ -47,6 +46,10 @@ pub fn main(init: std.process.Init) !void {
         deps,
         &static_allocator,
     );
+
+    // Transition from static to deinit only if run() reached static phase.
+    // Early returns (help, version, errors) never transition to static.
+    static_allocator.transition_from_static_to_deinit_if_static();
 }
 
 test {

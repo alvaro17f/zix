@@ -28,6 +28,8 @@ pub fn printTitle(writer: *std.Io.Writer, text: []const u8) !void {
 // --- Help / Version ---
 
 pub fn printHelp(writer: *std.Io.Writer) !void {
+    // WHY: help text is a static constant — no arguments to validate.
+    // The invariant is that this function always produces output.
     try io.printTo(writer,
         \\
         \\ *****************************************************
@@ -141,6 +143,11 @@ fn writeConfirmPrompt(
 }
 
 fn parseConfirmResponse(line: []const u8, default_value: bool) bool {
+    // WHY: "y"/"yes" are affirmative, "n"/"no" are negative.
+    // Empty input falls back to default_value. Everything else defaults to false
+    // to prevent accidental confirmation of destructive operations.
+    std.debug.assert(line.len <= 256);
+
     // Stack-allocated lowercase buffer. No dynamic allocation.
     var lower_buf: [256]u8 = undefined;
     if (line.len > lower_buf.len) return false;

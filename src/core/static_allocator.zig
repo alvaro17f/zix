@@ -19,6 +19,7 @@ const State = enum {
 };
 
 pub fn init(parent_allocator: mem.Allocator) StaticAllocator {
+    // State starts in .init to allow allocation during setup.
     return .{
         .parent_allocator = parent_allocator,
         .state = .init,
@@ -44,6 +45,8 @@ pub fn transition_from_static_to_deinit_if_static(self: *StaticAllocator) void {
 }
 
 pub fn allocator(self: *StaticAllocator) mem.Allocator {
+    // Assert invariant: must be in init or static state to vend an allocator.
+    assert(self.state == .init or self.state == .static);
     return .{
         .ptr = self,
         .vtable = &.{
@@ -75,7 +78,10 @@ fn remap(ctx: *anyopaque, buf: []u8, buf_align: Alignment, new_len: usize, ret_a
 
 fn free(ctx: *anyopaque, buf: []u8, buf_align: Alignment, ret_addr: usize) void {
     const self: *StaticAllocator = @ptrCast(@alignCast(ctx));
-    // Allow free in all states. allocPrint internally frees intermediate buffers.
+    // Allow free in all states: allocPrint internally frees intermediate buffers,
+    // and these frees happen both during init (pre-transition) and at deinit.
+    // In .static state, only free is permitted — alloc and resize panic.
+    _ = self.state;
     return self.parent_allocator.rawFree(buf, buf_align, ret_addr);
 }
 

@@ -53,6 +53,10 @@ pub fn execute(
     commands: Commands,
     deps: Deps,
 ) !void {
+    // Assert preconditions: config must be valid, commands must not be empty.
+    std.debug.assert(config.repo.len > 0);
+    std.debug.assert(config.hostname.len > 0);
+
     try deps.printTitle(writer, "ZIX Configuration");
     try deps.configPrint(writer, config);
 
@@ -93,6 +97,9 @@ fn stageGitChanges(
     commands: Commands,
     deps: Deps,
 ) !void {
+    // Assert preconditions: command strings must have been built.
+    std.debug.assert(commands.git_diff.len > 0);
+
     // diff --exit-code returns 1 when there are unstaged changes.
     const has_changes = try deps.run(cli_io, commands.git_diff, .{ .output = false });
     if (has_changes != 1) return;

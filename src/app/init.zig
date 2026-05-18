@@ -10,6 +10,13 @@ const Config = @import("config.zig").Config;
 const StaticAllocator = @import("../core/static_allocator.zig");
 const VERSION = @import("zon").version;
 
+/// Result of parsing flags: success, or a specific early-exit action.
+const ParseResult = enum {
+    success,
+    help,
+    version,
+};
+
 pub fn run(
     cli_io: std.Io,
     writer: *std.Io.Writer,
@@ -17,7 +24,7 @@ pub fn run(
     deps: cli_module.Deps,
     static_allocator: *StaticAllocator,
 ) !void {
-    // Assert preconditions: args must not be empty.
+    // Assert preconditions: args must not be empty (at least program name).
     std.debug.assert(args.len >= 1);
 
     const allocator = static_allocator.allocator();
@@ -26,75 +33,22 @@ pub fn run(
     var hostname_buf: [std.posix.HOST_NAME_MAX]u8 = undefined;
     var config = Config.defaults(&hostname_buf);
 
+    // No flags: use default config directly.
     if (args.len <= 1) {
-        // Phase 1: build commands (allocation allowed).
+        // Assert: config must have valid defaults with no flags.
+        std.debug.assert(config.keep > 0);
         const commands = try buildCommands(config, allocator);
         // Transition: no more allocation after this point.
         static_allocator.transition_from_init_to_static();
-        // Phase 2: execute (zero allocation).
         return try execute(cli_io, writer, config, commands, deps);
     }
 
-    // Parse flags: each '-' introduces one or more single-char flags.
-    var arg_index: u32 = 1;
-    while (arg_index < args.len) : (arg_index += 1) {
-        const arg = args[arg_index];
-        // Each arg must be non-empty.
-        std.debug.assert(arg.len > 0);
-        if (arg[0] == '-') {
-            for (arg[1..]) |flag| {
-                switch (flag) {
-                    'h' => {
-                        return try ui.printHelp(writer);
-                    },
-                    'v' => {
-                        return try ui.printVersion(writer, VERSION);
-                    },
-                    'd' => config.diff = true,
-                    'u' => config.update = true,
-                    'r', 'n', 'k' => {
-                        // These flags consume the next argument as their value.
-                        arg_index += 1;
-                        if (arg_index >= args.len) {
-                            return try io.printTo(
-                                writer,
-                                "{s}Error: \"-{c}\" flag requires an argument\n{s}",
-                                .{ io.Red, flag, io.Reset },
-                            );
-                        }
-                        if (flag == 'r') config.repo = args[arg_index];
-                        if (flag == 'n') config.hostname = args[arg_index];
-                        if (flag == 'k') {
-                            const number = std.fmt.parseInt(u8, args[arg_index], 10) catch {
-                                return try io.printTo(
-                                    writer,
-                                    "{s}Error: Value of \"-k\" flag is not numeric.\n{s}",
-                                    .{ io.Red, io.Reset },
-                                );
-                            };
-                            config.keep = number;
-                        }
-                    },
-                    else => return try io.printTo(
-                        writer,
-                        "{s}Error: Unknown flag \"-{c}\"\n{s}",
-                        .{ io.Red, flag, io.Reset },
-                    ),
-                }
-            }
-        } else {
-            if (equal(u8, arg, "help")) {
-                return try ui.printHelp(writer);
-            }
-            if (equal(u8, arg, "version")) {
-                return try ui.printVersion(writer, VERSION);
-            }
-            return try io.printTo(
-                writer,
-                "{s}Error: Unknown argument \"{s}\"\n{s}",
-                .{ io.Red, arg, io.Reset },
-            );
-        }
+    // Parse flags into config. Returns early-exit action for -h/-v.
+    const result = parseFlags(args, &config, writer);
+    switch (result) {
+        .help => return try ui.printHelp(writer),
+        .version => return try ui.printVersion(writer, VERSION),
+        .success => {},
     }
 
     // Validate after all flags are parsed so partial configs get caught.
@@ -108,6 +62,74 @@ pub fn run(
     static_allocator.transition_from_init_to_static();
     // Phase 2: execute (zero allocation).
     return try execute(cli_io, writer, config, commands, deps);
+}
+
+/// Parse command-line flags into config. WHY: extracting flag parsing from
+/// run() keeps run() under 70 lines and separates control flow from state mutation.
+fn parseFlags(
+    args: []const []const u8,
+    config: *Config,
+    writer: *std.Io.Writer,
+) ParseResult {
+    // Each arg must be non-empty.
+    var arg_index: u32 = 1;
+    while (arg_index < args.len) : (arg_index += 1) {
+        const arg = args[arg_index];
+        std.debug.assert(arg.len > 0);
+        if (arg[0] == '-') {
+            for (arg[1..]) |flag| {
+                switch (flag) {
+                    'h' => return .help,
+                    'v' => return .version,
+                    'd' => config.diff = true,
+                    'u' => config.update = true,
+                    'r', 'n', 'k' => {
+                        // These flags consume the next argument as their value.
+                        arg_index += 1;
+                        if (arg_index >= args.len) {
+                            _ = io.printTo(
+                                writer,
+                                "{s}Error: \"-{c}\" flag requires an argument\n{s}",
+                                .{ io.Red, flag, io.Reset },
+                            ) catch {};
+                            return .success;
+                        }
+                        if (flag == 'r') config.repo = args[arg_index];
+                        if (flag == 'n') config.hostname = args[arg_index];
+                        if (flag == 'k') {
+                            const number = std.fmt.parseInt(u8, args[arg_index], 10) catch {
+                                _ = io.printTo(
+                                    writer,
+                                    "{s}Error: Value of \"-k\" flag is not numeric.\n{s}",
+                                    .{ io.Red, io.Reset },
+                                ) catch {};
+                                return .success;
+                            };
+                            config.keep = number;
+                        }
+                    },
+                    else => {
+                        _ = io.printTo(
+                            writer,
+                            "{s}Error: Unknown flag \"-{c}\"\n{s}",
+                            .{ io.Red, flag, io.Reset },
+                        ) catch {};
+                        return .success;
+                    },
+                }
+            }
+        } else {
+            if (equal(u8, arg, "help")) return .help;
+            if (equal(u8, arg, "version")) return .version;
+            _ = io.printTo(
+                writer,
+                "{s}Error: Unknown argument \"{s}\"\n{s}",
+                .{ io.Red, arg, io.Reset },
+            ) catch {};
+            return .success;
+        }
+    }
+    return .success;
 }
 
 // --- Test Mocks ---

@@ -49,8 +49,7 @@ pub fn nixKeep(
     std.debug.assert(generations_to_keep > 0);
     return std.fmt.allocPrint(
         allocator,
-        "sudo nix-env --profile /nix/var/nix/profiles/system"
-        ++ " --delete-generations +{d}",
+        "sudo nix-env --profile /nix/var/nix/profiles/system" ++ " --delete-generations +{d}",
         .{generations_to_keep},
     );
 }
@@ -87,8 +86,7 @@ test "command strings" {
     const s6 = try nixKeep(alloc, 5);
     defer alloc.free(s6);
     try std.testing.expectEqualStrings(
-        "sudo nix-env --profile /nix/var/nix/profiles/system"
-        ++ " --delete-generations +5",
+        "sudo nix-env --profile /nix/var/nix/profiles/system" ++ " --delete-generations +5",
         s6,
     );
 }

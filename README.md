@@ -92,3 +92,7 @@ Tests run with LLVM backend (`.use_llvm = true`) for accurate DWARF instrumentat
 ## License
 
 MIT. See LICENSE.
+
+## Style Guide
+
+This project follows [TigerBeetle's TIGER_STYLE](docs/TIGER_STYLE.md).

@@ -5,17 +5,14 @@ const ui = @import("core/ui.zig");
 const process = @import("core/process.zig");
 const StaticAllocator = @import("core/static_allocator.zig");
 
-/// Pre-allocated memory for all runtime allocations.
-/// Sized for: args_list (~256 bytes) + 7 command strings (~128 bytes each) + margin.
-/// Increase if more commands are added or repo paths are longer.
-const MEMORY_SIZE: usize = 2048;
-
 pub fn main(init: std.process.Init) !void {
-    // All memory pre-allocated at startup. No allocation from system after this point.
-    var memory: [MEMORY_SIZE]u8 = undefined;
-    var fba = std.heap.FixedBufferAllocator.init(&memory);
+    // Arena allocator: all allocation happens during init only.
+    // StaticAllocator blocks alloc/free after transition to .static.
+    // arena.deinit() frees everything at shutdown — after execute() returns.
+    var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
+    defer arena.deinit();
 
-    var static_allocator = StaticAllocator.init(fba.allocator());
+    var static_allocator = StaticAllocator.init(arena.allocator());
 
     const allocator = static_allocator.allocator();
 
